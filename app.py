@@ -16,13 +16,14 @@ if 'furgoni' not in st.session_state:
         {"MARCA": "Mercedes", "MODELLO": "Sprinter", "TIPO": "Furgone", "TARGA": "HB787TS", "DISPONIBILE": "GUASTO"},
     ])
 
-if 'corrieri' not in st.session_state:
-    st.session_state.corrieri = pd.DataFrame([
-        {"COGNOME": "CROCI", "NOME": "MARINO", "CELLULARE": "3314509080", "GIRO_FISSO": "1", "STATO": "Presente (Giro Fisso)", "GIRO_SUPPORTO": "", "MEZZO": "Nessuno", "NOTE": ""},
-        {"COGNOME": "D ANGELO", "NOME": "SALVATORE", "CELLULARE": "3881132883", "GIRO_FISSO": "3", "STATO": "Presente (Giro Fisso)", "GIRO_SUPPORTO": "", "MEZZO": "Nessuno", "NOTE": ""},
-        {"COGNOME": "MARCIANO", "NOME": "ANTONIO", "CELLULARE": "3489292359", "GIRO_FISSO": "4", "STATO": "Presente (Giro Fisso)", "GIRO_SUPPORTO": "", "MEZZO": "Nessuno", "NOTE": ""},
-        {"COGNOME": "CAPUTO", "NOME": "OVIDIO", "CELLULARE": "3385277033", "GIRO_FISSO": "5", "STATO": "Supporto Altra Filiale", "GIRO_SUPPORTO": "PESCARA", "MEZZO": "Nessuno", "NOTE": ""},
-        {"COGNOME": "AINIS", "NOME": "CIRO", "CELLULARE": "3891618386", "GIRO_FISSO": "6", "STATO": "Assente", "GIRO_SUPPORTO": "", "MEZZO": "Nessuno", "NOTE": "Malattia"},
+# ANAGRAFICA PERSONALE: Contiene solo i 4 campi base richiesti
+if 'anagrafica_corrieri' not in st.session_state:
+    st.session_state.anagrafica_corrieri = pd.DataFrame([
+        {"COGNOME": "CROCI", "NOME": "MARINO", "CELLULARE": "3314509080", "GIRO_FISSO": "1"},
+        {"COGNOME": "D ANGELO", "NOME": "SALVATORE", "CELLULARE": "3881132883", "GIRO_FISSO": "3"},
+        {"COGNOME": "MARCIANO", "NOME": "ANTONIO", "CELLULARE": "3489292359", "GIRO_FISSO": "4"},
+        {"COGNOME": "CAPUTO", "NOME": "OVIDIO", "CELLULARE": "3385277033", "GIRO_FISSO": "5"},
+        {"COGNOME": "AINIS", "NOME": "CIRO", "CELLULARE": "3891618386", "GIRO_FISSO": "6"},
     ])
 
 if 'responsabili' not in st.session_state:
@@ -34,6 +35,26 @@ if 'responsabili' not in st.session_state:
 if 'config_mail' not in st.session_state:
     st.session_state.config_mail = {"destinatari": "ufficio.logistica@esempio.com"}
 
+# Struttura di lavoro giornaliera temporanea creata unendo l'anagrafica con i campi operativi vuoti
+if 'stato_giornaliero' not in st.session_state:
+    df_giorno = st.session_state.anagrafica_corrieri.copy()
+    df_giorno["STATO"] = "Presente (Giro Fisso)"
+    df_giorno["GIRO_SUPPORTO"] = ""
+    df_giorno["MEZZO"] = "Nessuno"
+    df_giorno["NOTE"] = ""
+    st.session_state.stato_giornaliero = df_giorno
+
+# Sincronizza il tabellone se l'anagrafica di base viene modificata (aggiunta/rimozione autisti)
+if len(st.session_state.stato_giornaliero) != len(st.session_state.anagrafica_corrieri):
+    df_nuovo = st.session_state.anagrafica_corrieri.copy()
+    # Recupera lo stato precedente per non sovrascrivere il lavoro già fatto oggi
+    df_nuovo = df_nuovo.merge(st.session_state.stato_giornaliero[['COGNOME', 'NOME', 'STATO', 'GIRO_SUPPORTO', 'MEZZO', 'NOTE']], on=['COGNOME', 'NOME'], how='left')
+    df_nuovo["STATO"] = df_nuovo["STATO"].fillna("Presente (Giro Fisso)")
+    df_nuovo["GIRO_SUPPORTO"] = df_nuovo["GIRO_SUPPORTO"].fillna("")
+    df_nuovo["MEZZO"] = df_nuovo["MEZZO"].fillna("Nessuno")
+    df_nuovo["NOTE"] = df_nuovo["NOTE"].fillna("")
+    st.session_state.stato_giornaliero = df_nuovo
+
 # --- MENU DI NAVIGAZIONE A SINISTRA ---
 menu = ["📋 Tabellone Presenze", "🚐 Anagrafica Furgoni", "👥 Anagrafica Personale", "⚙️ Configurazione Mail"]
 scelta = st.sidebar.selectbox("Navigazione", menu)
@@ -41,15 +62,15 @@ scelta = st.sidebar.selectbox("Navigazione", menu)
 # --- 1. TABELLONE PRESENZE SNELLO (TUTTO A VISTA) ---
 if scelta == "📋 Tabellone Presenze":
     st.title("📋 Inserimento Presenze e Assegnazione Mezzi")
-    st.markdown("Tutte le voci sono configurabili direttamente nella griglia sottostante. Spostati con le frecce o il mouse ed effettua le modifiche al volo.")
+    st.markdown("I campi *Cognome, Nome, Cellulare e Giro Fisso* sono bloccati. Configura lo Stato, il Mezzo e le Note direttamente sulle righe attive.")
     
     # Estrazione dinamica della lista furgoni (ESCLUSI i GUASTO)
     furgoni_attivi = st.session_state.furgoni[st.session_state.furgoni['DISPONIBILE'] != "GUASTO"]
     elenco_furgoni_tendina = ["Nessuno"] + (furgoni_attivi['MARCA'] + " " + furgoni_attivi['MODELLO'] + " [" + furgoni_attivi['TARGA'] + "]").tolist()
     
-    # TABELLONE GLOBALE EDITABILE (Senza Expander)
+    # TABELLONE GLOBALE EDITABILE (Tutti i campi dinamici sono sbloccati qui)
     tabellone_modificato = st.data_editor(
-        st.session_state.corrieri,
+        st.session_state.stato_giornaliero,
         column_config={
             "COGNOME": st.column_config.TextColumn("Cognome", disabled=True),
             "NOME": st.column_config.TextColumn("Nome", disabled=True),
@@ -76,10 +97,10 @@ if scelta == "📋 Tabellone Presenze":
     )
     
     # Salvataggio istantaneo dello stato modificato
-    st.session_state.corrieri = tabellone_modificato
+    st.session_state.stato_giornaliero = tabellone_modificato
 
     # --- GENERAZIONE AUTOMATICA DEI 4 BLOCCHI DI OUTPUT ---
-    df_correnti = st.session_state.corrieri
+    df_correnti = st.session_state.stato_giornaliero
     blocco1 = df_correnti[df_correnti['STATO'] == "Presente (Giro Fisso)"][['COGNOME', 'NOME', 'CELLULARE', 'GIRO_FISSO', 'MEZZO', 'NOTE']]
     blocco2 = df_correnti[df_correnti['STATO'] == "Supporto Altra Filiale"][['COGNOME', 'NOME', 'CELLULARE', 'GIRO_SUPPORTO', 'MEZZO', 'NOTE']]
     blocco3 = st.session_state.responsabili
@@ -212,14 +233,21 @@ elif scelta == "🚐 Anagrafica Furgoni":
     )
     st.session_state.furgoni = furgoni_tabella
 
-# --- 3. SCHEDA ANAGRAFICA PERSONALE ---
+# --- 3. SCHEDA ANAGRAFICA PERSONALE (SOLO I PRIMI 4 CAMPI BASE) ---
 elif scelta == "👥 Anagrafica Personale":
     st.title("👥 Gestione Personale e Autisti")
     
     st.subheader("Anagrafica Fissa Corrieri")
-    st.markdown("Aggiungi o rimuovi autisti dall'organico fisso (Cognome, Nome, Cellulare, Giro standard).")
-    corrieri_tabella = st.data_editor(st.session_state.corrieri, num_rows="dynamic", use_container_width=True, key="tabella_gestione_corrieri")
-    st.session_state.corrieri = corrieri_tabella
+    st.markdown("Inserisci qui i dati base permanenti dell'organico (Cognome, Nome, Cellulare, Giro standard). L'ultima riga serve per inserire nuovi autisti.")
+    
+    # Gestisce solo ed esclusivamente le 4 colonne di anagrafica pura
+    corrieri_tabella = st.data_editor(
+        st.session_state.anagrafica_corrieri, 
+        num_rows="dynamic", 
+        use_container_width=True, 
+        key="tabella_gestione_corrieri"
+    )
+    st.session_state.anagrafica_corrieri = corrieri_tabella
     
     st.markdown("---")
     st.subheader("Anagrafica Fissa Responsabili / Capi Turno")
