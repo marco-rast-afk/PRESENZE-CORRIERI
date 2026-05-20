@@ -2,11 +2,16 @@ import streamlit as st
 import pandas as pd
 from fpdf import FPDF
 import io
+import json
+import os
 from datetime import datetime
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 st.set_page_config(page_title="Gestione Presenze Corrieri", layout="wide")
+
+# File JSON locale per il salvataggio permanente dei dati
+DB_FILE = "database_presenze.json"
 
 # Dizionario per convertire il numero del mese nel nome in italiano maiuscolo
 MESI_ITA = {
@@ -14,221 +19,252 @@ MESI_ITA = {
     7: "LUGLIO", 8: "AGOSTO", 9: "SETTEMBRE", 10: "OTTOBRE", 11: "NOVEMBRE", 12: "DICEMBRE"
 }
 
-# --- DATABASE INIZIALE (SESSION STATE) ---
-if 'furgoni' not in st.session_state:
-    st.session_state.furgoni = pd.DataFrame([
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EP800MZ", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EX184SW", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EX804EN", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EX805EN", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FA395MK", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FD357DK", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FJ898TP", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FN446DZ", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FP750ED", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FR953KJ", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FX735HG", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FX845YP", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FX883NS", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GC957VZ", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF235BK", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF237BK", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF238BK", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF239BK", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF298BK", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG111WM", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG112WM", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG149WM", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG150WM", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG151WM", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG184WM", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG187WM", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG188WM", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GH880BE", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GL849VF", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GL850VF", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GL851VF", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GN724ES", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GN728ES", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GP529LX", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR250RF", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR256RF", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR450EF", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR452EF", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR474EF", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR964MV", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS386TT", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS387TT", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS554WM", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS556WM", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS557WM", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GT874LE", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX245HJ", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX250HJ", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX300XE", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX301XE", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX322TJ", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX358HJ", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX363HJ", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX582FK", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX831FN", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX837FN", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX852FN", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GY571FV", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HA062CS", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HA385CY", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HA386CY", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HA902CR", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB659CE", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB662CE", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB683CE", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB783TS", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB784TS", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB785TS", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB786TS", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB787TS", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB788TS", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB789TS", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB790TS", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB792TS", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB793TS", "DISPONIBILE": "SI"},
-        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HC627CS", "DISPONIBILE": "SI"},
-    ])
+# --- FUNZIONI DI SALVATAGGIO E CARICAMENTO JSON ---
+def salva_database_json():
+    """Converte i DataFrame di session_state in dizionari e li scrive sul file JSON"""
+    data_to_save = {
+        "furgoni": st.session_state.furgoni.to_dict(orient="records"),
+        "anagrafica_corrieri": st.session_state.anagrafica_corrieri.to_dict(orient="records"),
+        "responsabili": st.session_state.responsabili.to_dict(orient="records"),
+        "stato_giornaliero": st.session_state.stato_giornaliero.to_dict(orient="records")
+    }
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(data_to_save, f, ensure_ascii=False, indent=4)
 
-if 'anagrafica_corrieri' not in st.session_state:
-    st.session_state.anagrafica_corrieri = pd.DataFrame([
-        {"COGNOME": "CROCI", "NOME": "MARINO", "CELLULARE": "3314509080", "GIRO_FISSO": "1"},
-        {"COGNOME": "VINCIGUERRA", "NOME": "ANGELO", "CELLULARE": "3351696753", "GIRO_FISSO": "2"},
-        {"COGNOME": "D ANGELO", "NOME": "SALVATORE", "CELLULARE": "3881132883", "GIRO_FISSO": "3"},
-        {"COGNOME": "MARCIANO", "NOME": "ANTONIO", "CELLULARE": "3489292359", "GIRO_FISSO": "4"},
-        {"COGNOME": "CAPUTO", "NOME": "OVIDIO", "CELLULARE": "3385277033", "GIRO_FISSO": "5"},
-        {"COGNOME": "AINIS", "NOME": "CIRO", "CELLULARE": "3891618386", "GIRO_FISSO": "6"},
-        {"COGNOME": "CAPPELLA", "NOME": "GIUSEPPE", "CELLULARE": "3427598835", "GIRO_FISSO": "7"},
-        {"COGNOME": "BEN CHATTI", "NOME": "MARTIN", "CELLULARE": "3451303466", "GIRO_FISSO": "8"},
-        {"COGNOME": "POMILIA", "NOME": "PIETRO", "CELLULARE": "3382107031", "GIRO_FISSO": "9"},
-        {"COGNOME": "CAPUTO", "NOME": "GIANLUCA", "CELLULARE": "3391178350", "GIRO_FISSO": "10"},
-        {"COGNOME": "CAIONI", "NOME": "MANUEL", "CELLULARE": "3703349078", "GIRO_FISSO": "11"},
-        {"COGNOME": "MANZO", "NOME": "GIAMPAOLO", "CELLULARE": "3384187899", "GIRO_FISSO": "12"},
-        {"COGNOME": "XHANI", "NOME": "ORGES", "CELLULARE": "3515960708", "GIRO_FISSO": "13"},
-        {"COGNOME": "CISSE", "NOME": "THIERNO", "CELLULARE": "3513434477", "GIRO_FISSO": "14"},
-        {"COGNOME": "CAPPONI", "NOME": "MASSIMILIANO", "CELLULARE": "3206274943", "GIRO_FISSO": "15"},
-        {"COGNOME": "MERCURI", "NOME": "SIMONE", "CELLULARE": "3483624304", "GIRO_FISSO": "16"},
-        {"COGNOME": "FELICIANI", "NOME": "SAMUELE", "CELLULARE": "3459494393", "GIRO_FISSO": "17"},
-        {"COGNOME": "CALUGI", "NOME": "ALESSANDRO", "CELLULARE": "3467894592", "GIRO_FISSO": "18"},
-        {"COGNOME": "D'ANTONIO", "NOME": "GIANFRANCO", "CELLULARE": "3791766322", "GIRO_FISSO": "19"},
-        {"COGNOME": "SPACCASASSI", "NOME": "MARIO", "CELLULARE": "3298424239", "GIRO_FISSO": "20"},
-        {"COGNOME": "MACRILLANTE", "NOME": "LORENZO", "CELLULARE": "3396085295", "GIRO_FISSO": "21"},
-        {"COGNOME": "CAPPELLI", "NOME": "SILVIO", "CELLULARE": "3314578329", "GIRO_FISSO": "22"},
-        {"COGNOME": "SQUILLACE", "NOME": "MICHELE", "CELLULARE": "3404966459", "GIRO_FISSO": "23"},
-        {"COGNOME": "CAPRIOTTI", "NOME": "CRISTIANO", "CELLULARE": "3452137376", "GIRO_FISSO": "24"},
-        {"COGNOME": "VINCIGUERRA", "NOME": "VINCENZO", "CELLULARE": "3348361930", "GIRO_FISSO": "25"},
-        {"COGNOME": "AMANDONICO", "NOME": "DARIO", "CELLULARE": "3477784701", "GIRO_FISSO": "26"},
-        {"COGNOME": "DI PIETRO", "NOME": "SIMONE", "CELLULARE": "3484587690", "GIRO_FISSO": "27"},
-        {"COGNOME": "LUCIANI", "NOME": "GIOVANNI", "CELLULARE": "3282063754", "GIRO_FISSO": "28"},
-        {"COGNOME": "DE SIMONE", "NOME": "ANTONIO", "CELLULARE": "3472316522", "GIRO_FISSO": "29"},
-        {"COGNOME": "MARCONI", "NOME": "ANDREA", "CELLULARE": "3381092067", "GIRO_FISSO": "30"},
-        {"COGNOME": "PETROCCHI", "NOME": "ALESSANDRO", "CELLULARE": "3204269922", "GIRO_FISSO": "31"},
-        {"COGNOME": "MANAZZA", "NOME": "GIUSEPPE", "CELLULARE": "3926854314", "GIRO_FISSO": "32"},
-        {"COGNOME": "SCARPA", "NOME": "CRESCENZO", "CELLULARE": "3494993238", "GIRO_FISSO": "33"},
-        {"COGNOME": "FEBO", "NOME": "DANIELE", "CELLULARE": "3297074905", "GIRO_FISSO": "34"},
-        {"COGNOME": "DIENG", "NOME": "MAYPE", "CELLULARE": "3203619657", "GIRO_FISSO": "35"},
-        {"COGNOME": "MARCONI", "NOME": "ALESSIO", "CELLULARE": "3931574397", "GIRO_FISSO": "36"},
-        {"COGNOME": "CORCIONE", "NOME": "GIUSEPPE", "CELLULARE": "3203437844", "GIRO_FISSO": "37"},
-        {"COGNOME": "PAVAN", "NOME": "ALESSANDRO", "CELLULARE": "3515953354", "GIRO_FISSO": "38"},
-        {"COGNOME": "CAMUSO", "NOME": "LUCA", "CELLULARE": "3511244208", "GIRO_FISSO": "39"},
-        {"COGNOME": "NICCOLINI", "NOME": "ANDREA", "CELLULARE": "3202732824", "GIRO_FISSO": "40"},
-        {"COGNOME": "VINOTTI", "NOME": "SONNY", "CELLULARE": "3313800865", "GIRO_FISSO": "41"},
-        {"COGNOME": "SCIARRA", "NOME": "ALESSANDRO", "CELLULARE": "3515006439", "GIRO_FISSO": "42"},
-        {"COGNOME": "ENOW", "NOME": "SOLOMON", "CELLULARE": "3930180387", "GIRO_FISSO": "43"},
-        {"COGNOME": "GIACOMELLI", "NOME": "PAOLO", "CELLULARE": "3298884097", "GIRO_FISSO": "201"},
-        {"COGNOME": "SPALAZZI", "NOME": "BENEDETTA", "CELLULARE": "3341971927", "GIRO_FISSO": "202"},
-        {"COGNOME": "FERRAMINI", "NOME": "PANCRAZIO", "CELLULARE": "3408660269", "GIRO_FISSO": "203"},
-        {"COGNOME": "OREFICE", "NOME": "SALVAVORE", "CELLULARE": "3899012716", "GIRO_FISSO": "204"},
-        {"COGNOME": "SALVI", "NOME": "GIANLUCA", "CELLULARE": "3289122867", "GIRO_FISSO": "205"},
-        {"COGNOME": "GIULIANI", "NOME": "LUIGI", "CELLULARE": "3318356858", "GIRO_FISSO": "206"},
-        {"COGNOME": "TOMMARELLI", "NOME": "ALFONSO", "CELLULARE": "3478548756", "GIRO_FISSO": "207"},
-        {"COGNOME": "NISTOR", "NOME": "BOGDAN", "CELLULARE": "3293436637", "GIRO_FISSO": "208"},
-        {"COGNOME": "DE MINICIS", "NOME": "GIULIANO", "CELLULARE": "3932174950", "GIRO_FISSO": "209"},
-        {"COGNOME": "PERILLO", "NOME": "VINCENZO", "CELLULARE": "3349059267", "GIRO_FISSO": "210"},
-        {"COGNOME": "BORGIA", "NOME": "FRANCESCO", "CELLULARE": "3280347303", "GIRO_FISSO": "211"},
-        {"COGNOME": "VESPERINI", "NOME": "ROBERTO", "CELLULARE": "3203215836", "GIRO_FISSO": "212"},
-        {"COGNOME": "PROTASI", "NOME": "FILIPPO", "CELLULARE": "3490626638", "GIRO_FISSO": "213"},
-        {"COGNOME": "DE MATTEIS", "NOME": "ALESSIA", "CELLULARE": "3490566977", "GIRO_FISSO": "214"},
-        {"COGNOME": "PELLE", "NOME": "EUGENIO", "CELLULARE": "3272314445", "GIRO_FISSO": "215"},
-        {"COGNOME": "COSTANTINI", "NOME": "FABRIZIO", "CELLULARE": "3355869387", "GIRO_FISSO": "216"},
-        {"COGNOME": "MASCITTI", "NOME": "CLAUDIO", "CELLULARE": "3404501899", "GIRO_FISSO": "217"},
-        {"COGNOME": "TRANQUILLI", "NOME": "SIMONE", "CELLULARE": "3807991216", "GIRO_FISSO": "218"},
-        {"COGNOME": "MARUSCO", "NOME": "DAVIDE", "CELLULARE": "3296488555", "GIRO_FISSO": "219"},
-        {"COGNOME": "MASSICCI", "NOME": "EMILIE", "CELLULARE": "3896382624", "GIRO_FISSO": "220"},
-        {"COGNOME": "BOFFINI", "NOME": "VALERIO", "CELLULARE": "3703393921", "GIRO_FISSO": "221"},
-        {"COGNOME": "VINCIGUERRA", "NOME": "ROSARIO", "CELLULARE": "3888818725", "GIRO_FISSO": "222"},
-        {"COGNOME": "TRANQUILLI", "NOME": "JESSICA", "CELLULARE": "3466767960", "GIRO_FISSO": "223"},
-        {"COGNOME": "GERMINI", "NOME": "MASSIMO", "CELLULARE": "3381174017", "GIRO_FISSO": "224"},
-        {"COGNOME": "FELICIANI", "NOME": "MATTEO", "CELLULARE": "3459494394", "GIRO_FISSO": "225"},
-        {"COGNOME": "PERSICO", "NOME": "GIADA", "CELLULARE": "3500750399", "GIRO_FISSO": "226"},
-        {"COGNOME": "MATJA", "NOME": "KLAUDIO", "CELLULARE": "3291692911", "GIRO_FISSO": "227"},
-        {"COGNOME": "ROTUNNO", "NOME": "DARIO", "CELLULARE": "3387710023", "GIRO_FISSO": "228"},
-        {"COGNOME": "LANZA", "NOME": "CHRISTIAN", "CELLULARE": "3881680533", "GIRO_FISSO": "230"},
-        {"COGNOME": "RUZZINI", "NOME": "ROBERTO", "CELLULARE": "3283797115", "GIRO_FISSO": "501"},
-        {"COGNOME": "STANGONI", "NOME": "MARCO", "CELLULARE": "3319145878", "GIRO_FISSO": "503"},
-        {"COGNOME": "ECHEZURIA", "NOME": "CARLOS", "CELLULARE": "3317412770", "GIRO_FISSO": "508"},
-        {"COGNOME": "ROSCIOLI", "NOME": "PIERFRANCESCO", "CELLULARE": "3454280718", "GIRO_FISSO": "510"},
-        {"COGNOME": "SPAGNOLI", "NOME": "ANDREA", "CELLULARE": "3756760553", "GIRO_FISSO": "511"},
-        {"COGNOME": "MEDICO", "NOME": "PIERPAOLO", "CELLULARE": "3298537578", "GIRO_FISSO": "513"},
-        {"COGNOME": "MUHAMMAD", "NOME": "YOUNAS", "CELLULARE": "3463618752", "GIRO_FISSO": "514"},
-        {"COGNOME": "IAVARONE", "NOME": "GIUSTINO", "CELLULARE": "3488701779", "GIRO_FISSO": "515"},
-        {"COGNOME": "CATALANO", "NOME": "SILVIO", "CELLULARE": "3534763452", "GIRO_FISSO": "517"},
-        {"COGNOME": "DI GIROLAMO", "NOME": "ALESSANDRO", "CELLULARE": "3802543375", "GIRO_FISSO": "518"},
-    ])
+def carica_database_json():
+    """Carica i dati dal file JSON se esiste, altrimenti inizializza i dati di default"""
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                st.session_state.furgoni = pd.DataFrame(data["furgoni"])
+                st.session_state.anagrafica_corrieri = pd.DataFrame(data["anagrafica_corrieri"])
+                st.session_state.responsabili = pd.DataFrame(data["responsabili"])
+                st.session_state.stato_giornaliero = pd.DataFrame(data["stato_giornaliero"])
+                return True
+        except Exception as e:
+            st.error(f"Errore nel caricamento del database JSON: {e}. Caricamento dati predefiniti.")
+    return False
 
-if 'responsabili' not in st.session_state:
-    st.session_state.responsabili = pd.DataFrame([
-        {"COGNOME": "ROSSI", "NOME": "LUIGI", "RUOLO": "Responsabile Logistica"},
-        {"COGNOME": "VERDI", "NOME": "MARCO", "RUOLO": "Supervisore di Turno"}
-    ])
+# --- INIZIALIZZAZIONE DATABASE ---
+# Se il database JSON esiste, carica tutto da lì, altrimenti usa i dati di fabbrica fissi
+if 'database_caricato' not in st.session_state:
+    if carica_database_json():
+        st.session_state.database_caricato = True
+    else:
+        # DATI DI DEFAULT (Se il file JSON non esiste ancora)
+        st.session_state.furgoni = pd.DataFrame([
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EP800MZ", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EX184SW", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EX804EN", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EX805EN", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FA395MK", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FD357DK", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FJ898TP", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FN446DZ", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FP750ED", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FR953KJ", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FX735HG", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FX845YP", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FX883NS", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GC957VZ", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF235BK", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF237BK", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF238BK", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF239BK", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF298BK", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG111WM", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG112WM", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG149WM", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG150WM", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG151WM", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG184WM", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG187WM", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG188WM", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GH880BE", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GL849VF", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GL850VF", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GL851VF", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GN724ES", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GN728ES", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GP529LX", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR250RF", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR256RF", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR450EF", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR452EF", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR474EF", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR964MV", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS386TT", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS387TT", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS554WM", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS556WM", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS557WM", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GT874LE", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX245HJ", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX250HJ", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX300XE", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX301XE", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX322TJ", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX358HJ", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX363HJ", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX582FK", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX831FN", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX837FN", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX852FN", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GY571FV", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HA062CS", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HA385CY", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HA386CY", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HA902CR", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB659CE", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB662CE", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB683CE", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB783TS", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB784TS", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB785TS", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB786TS", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB787TS", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB788TS", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB789TS", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB790TS", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB792TS", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB793TS", "DISPONIBILE": "SI"},
+            {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HC627CS", "DISPONIBILE": "SI"},
+        ])
+        
+        st.session_state.anagrafica_corrieri = pd.DataFrame([
+            {"COGNOME": "CROCI", "NOME": "MARINO", "CELLULARE": "3314509080", "GIRO_FISSO": "1"},
+            {"COGNOME": "VINCIGUERRA", "NOME": "ANGELO", "CELLULARE": "3351696753", "GIRO_FISSO": "2"},
+            {"COGNOME": "D ANGELO", "NOME": "SALVATORE", "CELLULARE": "3881132883", "GIRO_FISSO": "3"},
+            {"COGNOME": "MARCIANO", "NOME": "ANTONIO", "CELLULARE": "3489292359", "GIRO_FISSO": "4"},
+            {"COGNOME": "CAPUTO", "NOME": "OVIDIO", "CELLULARE": "3385277033", "GIRO_FISSO": "5"},
+            {"COGNOME": "AINIS", "NOME": "CIRO", "CELLULARE": "3891618386", "GIRO_FISSO": "6"},
+            {"COGNOME": "CAPPELLA", "NOME": "GIUSEPPE", "CELLULARE": "3427598835", "GIRO_FISSO": "7"},
+            {"COGNOME": "BEN CHATTI", "NOME": "MARTIN", "CELLULARE": "3451303466", "GIRO_FISSO": "8"},
+            {"COGNOME": "POMILIA", "NOME": "PIETRO", "CELLULARE": "3382107031", "GIRO_FISSO": "9"},
+            {"COGNOME": "CAPUTO", "NOME": "GIANLUCA", "CELLULARE": "3391178350", "GIRO_FISSO": "10"},
+            {"COGNOME": "CAIONI", "NOME": "MANUEL", "CELLULARE": "3703349078", "GIRO_FISSO": "11"},
+            {"COGNOME": "MANZO", "NOME": "GIAMPAOLO", "CELLULARE": "3384187899", "GIRO_FISSO": "12"},
+            {"COGNOME": "XHANI", "NOME": "ORGES", "CELLULARE": "3515960708", "GIRO_FISSO": "13"},
+            {"COGNOME": "CISSE", "NOME": "THIERNO", "CELLULARE": "3513434477", "GIRO_FISSO": "14"},
+            {"COGNOME": "CAPPONI", "NOME": "MASSIMILIANO", "CELLULARE": "3206274943", "GIRO_FISSO": "15"},
+            {"COGNOME": "MERCURI", "NOME": "SIMONE", "CELLULARE": "3483624304", "GIRO_FISSO": "16"},
+            {"COGNOME": "FELICIANI", "NOME": "SAMUELE", "CELLULARE": "3459494393", "GIRO_FISSO": "17"},
+            {"COGNOME": "CALUGI", "NOME": "ALESSANDRO", "CELLULARE": "3467894592", "GIRO_FISSO": "18"},
+            {"COGNOME": "D'ANTONIO", "NOME": "GIANFRANCO", "CELLULARE": "3791766322", "GIRO_FISSO": "19"},
+            {"COGNOME": "SPACCASASSI", "NOME": "MARIO", "CELLULARE": "3298424239", "GIRO_FISSO": "20"},
+            {"COGNOME": "MACRILLANTE", "NOME": "LORENZO", "CELLULARE": "3396085295", "GIRO_FISSO": "21"},
+            {"COGNOME": "CAPPELLI", "NOME": "SILVIO", "CELLULARE": "3314578329", "GIRO_FISSO": "22"},
+            {"COGNOME": "SQUILLACE", "NOME": "MICHELE", "CELLULARE": "3404966459", "GIRO_FISSO": "23"},
+            {"COGNOME": "CAPRIOTTI", "NOME": "CRISTIANO", "CELLULARE": "3452137376", "GIRO_FISSO": "24"},
+            {"COGNOME": "VINCIGUERRA", "NOME": "VINCENZO", "CELLULARE": "3348361930", "GIRO_FISSO": "25"},
+            {"COGNOME": "AMANDONICO", "NOME": "DARIO", "CELLULARE": "3477784701", "GIRO_FISSO": "26"},
+            {"COGNOME": "DI PIETRO", "NOME": "SIMONE", "CELLULARE": "3484587690", "GIRO_FISSO": "27"},
+            {"COGNOME": "LUCIANI", "NOME": "GIOVANNI", "CELLULARE": "3282063754", "GIRO_FISSO": "28"},
+            {"COGNOME": "DE SIMONE", "NOME": "ANTONIO", "CELLULARE": "3472316522", "GIRO_FISSO": "29"},
+            {"COGNOME": "MARCONI", "NOME": "ANDREA", "CELLULARE": "3381092067", "GIRO_FISSO": "30"},
+            {"COGNOME": "PETROCCHI", "NOME": "ALESSANDRO", "CELLULARE": "3204269922", "GIRO_FISSO": "31"},
+            {"COGNOME": "MANAZZA", "NOME": "GIUSEPPE", "CELLULARE": "3926854314", "GIRO_FISSO": "32"},
+            {"COGNOME": "SCARPA", "NOME": "CRESCENZO", "CELLULARE": "3494993238", "GIRO_FISSO": "33"},
+            {"COGNOME": "FEBO", "NOME": "DANIELE", "CELLULARE": "3297074905", "GIRO_FISSO": "34"},
+            {"COGNOME": "DIENG", "NOME": "MAYPE", "CELLULARE": "3203619657", "GIRO_FISSO": "35"},
+            {"COGNOME": "MARCONI", "NOME": "ALESSIO", "CELLULARE": "3931574397", "GIRO_FISSO": "36"},
+            {"COGNOME": "CORCIONE", "NOME": "GIUSEPPE", "CELLULARE": "3203437844", "GIRO_FISSO": "37"},
+            {"COGNOME": "PAVAN", "NOME": "ALESSANDRO", "CELLULARE": "3515953354", "GIRO_FISSO": "38"},
+            {"COGNOME": "CAMUSO", "NOME": "LUCA", "CELLULARE": "3511244208", "GIRO_FISSO": "39"},
+            {"COGNOME": "NICCOLINI", "NOME": "ANDREA", "CELLULARE": "3202732824", "GIRO_FISSO": "40"},
+            {"COGNOME": "VINOTTI", "NOME": "SONNY", "CELLULARE": "3313800865", "GIRO_FISSO": "41"},
+            {"COGNOME": "SCIARRA", "NOME": "ALESSANDRO", "CELLULARE": "3515006439", "GIRO_FISSO": "42"},
+            {"COGNOME": "ENOW", "NOME": "SOLOMON", "CELLULARE": "3930180387", "GIRO_FISSO": "43"},
+            {"COGNOME": "GIACOMELLI", "NOME": "PAOLO", "CELLULARE": "3298884097", "GIRO_FISSO": "201"},
+            {"COGNOME": "SPALAZZI", "NOME": "BENEDETTA", "CELLULARE": "3341971927", "GIRO_FISSO": "202"},
+            {"COGNOME": "FERRAMINI", "NOME": "PANCRAZIO", "CELLULARE": "3408660269", "GIRO_FISSO": "203"},
+            {"COGNOME": "OREFICE", "NOME": "SALVAVORE", "CELLULARE": "3899012716", "GIRO_FISSO": "204"},
+            {"COGNOME": "SALVI", "NOME": "GIANLUCA", "CELLULARE": "3289122867", "GIRO_FISSO": "205"},
+            {"COGNOME": "GIULIANI", "NOME": "LUIGI", "CELLULARE": "3318356858", "GIRO_FISSO": "206"},
+            {"COGNOME": "TOMMARELLI", "NOME": "ALFONSO", "CELLULARE": "3478548756", "GIRO_FISSO": "207"},
+            {"COGNOME": "NISTOR", "NOME": "BOGDAN", "CELLULARE": "3293436637", "GIRO_FISSO": "208"},
+            {"COGNOME": "DE MINICIS", "NOME": "GIULIANO", "CELLULARE": "3932174950", "GIRO_FISSO": "209"},
+            {"COGNOME": "PERILLO", "NOME": "VINCENZO", "CELLULARE": "3349059267", "GIRO_FISSO": "210"},
+            {"COGNOME": "BORGIA", "NOME": "FRANCESCO", "CELLULARE": "3280347303", "GIRO_FISSO": "211"},
+            {"COGNOME": "VESPERINI", "NOME": "ROBERTO", "CELLULARE": "3203215836", "GIRO_FISSO": "212"},
+            {"COGNOME": "PROTASI", "NOME": "FILIPPO", "CELLULARE": "3490626638", "GIRO_FISSO": "213"},
+            {"COGNOME": "DE MATTEIS", "NOME": "ALESSIA", "CELLULARE": "3490566977", "GIRO_FISSO": "214"},
+            {"COGNOME": "PELLE", "NOME": "EUGENIO", "CELLULARE": "3272314445", "GIRO_FISSO": "215"},
+            {"COGNOME": "COSTANTINI", "NOME": "FABRIZIO", "CELLULARE": "3355869387", "GIRO_FISSO": "216"},
+            {"COGNOME": "MASCITTI", "NOME": "CLAUDIO", "CELLULARE": "3404501899", "GIRO_FISSO": "217"},
+            {"COGNOME": "TRANQUILLI", "NOME": "SIMONE", "CELLULARE": "3807991216", "GIRO_FISSO": "218"},
+            {"COGNOME": "MARUSCO", "NOME": "DAVIDE", "CELLULARE": "3296488555", "GIRO_FISSO": "219"},
+            {"COGNOME": "MASSICCI", "NOME": "EMILIE", "CELLULARE": "3896382624", "GIRO_FISSO": "220"},
+            {"COGNOME": "BOFFINI", "NOME": "VALERIO", "CELLULARE": "3703393921", "GIRO_FISSO": "221"},
+            {"COGNOME": "VINCIGUERRA", "NOME": "ROSARIO", "CELLULARE": "3888818725", "GIRO_FISSO": "222"},
+            {"COGNOME": "TRANQUILLI", "NOME": "JESSICA", "CELLULARE": "3466767960", "GIRO_FISSO": "223"},
+            {"COGNOME": "GERMINI", "NOME": "MASSIMO", "CELLULARE": "3381174017", "GIRO_FISSO": "224"},
+            {"COGNOME": "FELICIANI", "NOME": "MATTEO", "CELLULARE": "3459494394", "GIRO_FISSO": "225"},
+            {"COGNOME": "PERSICO", "NOME": "GIADA", "CELLULARE": "3500750399", "GIRO_FISSO": "226"},
+            {"COGNOME": "MATJA", "KLAUDIO", "CELLULARE": "3291692911", "GIRO_FISSO": "227"},
+            {"COGNOME": "ROTUNNO", "NOME": "DARIO", "CELLULARE": "3387710023", "GIRO_FISSO": "228"},
+            {"COGNOME": "LANZA", "NOME": "CHRISTIAN", "CELLULARE": "3881680533", "GIRO_FISSO": "230"},
+            {"COGNOME": "RUZZINI", "NOME": "ROBERTO", "CELLULARE": "3283797115", "GIRO_FISSO": "501"},
+            {"COGNOME": "STANGONI", "NOME": "MARCO", "CELLULARE": "3319145878", "GIRO_FISSO": "503"},
+            {"COGNOME": "ECHEZURIA", "NOME": "CARLOS", "CELLULARE": "3317412770", "GIRO_FISSO": "508"},
+            {"COGNOME": "ROSCIOLI", "NOME": "PIERFRANCESCO", "CELLULARE": "3454280718", "GIRO_FISSO": "510"},
+            {"COGNOME": "SPAGNOLI", "NOME": "ANDREA", "CELLULARE": "3756760553", "GIRO_FISSO": "511"},
+            {"COGNOME": "MEDICO", "NOME": "PIERPAOLO", "CELLULARE": "3298537578", "GIRO_FISSO": "513"},
+            {"COGNOME": "MUHAMMAD", "NOME": "YOUNAS", "CELLULARE": "3463618752", "GIRO_FISSO": "514"},
+            {"COGNOME": "IAVARONE", "NOME": "GIUSTINO", "CELLULARE": "3488701779", "GIRO_FISSO": "515"},
+            {"COGNOME": "CATALANO", "NOME": "SILVIO", "CELLULARE": "3534763452", "GIRO_FISSO": "517"},
+            {"COGNOME": "DI GIROLAMO", "NOME": "ALESSANDRO", "CELLULARE": "3802543375", "GIRO_FISSO": "518"},
+        ])
+        
+        st.session_state.responsabili = pd.DataFrame([
+            {"COGNOME": "ROSSI", "NOME": "LUIGI", "RUOLO": "Responsabile Logistica"},
+            {"COGNOME": "VERDI", "NOME": "MARCO", "RUOLO": "Supervisore di Turno"}
+        ])
+        
+        df_giorno = st.session_state.anagrafica_corrieri.copy()
+        df_giorno["STATO"] = "Presente (Giro Fisso)"
+        df_giorno["GIRO_SUPPORTO"] = ""
+        df_giorno["MEZZO"] = "Nessuno"
+        df_giorno["NOTE"] = ""
+        st.session_state.stato_giornaliero = df_giorno
+        st.session_state.database_caricato = True
 
-# Struttura permanente quotidiana (mantiene i dati salvati)
-if 'stato_giornaliero' not in st.session_state:
-    df_giorno = st.session_state.anagrafica_corrieri.copy()
-    df_giorno["STATO"] = "Presente (Giro Fisso)"
-    df_giorno["GIRO_SUPPORTO"] = ""
-    df_giorno["MEZZO"] = "Nessuno"
-    df_giorno["NOTE"] = ""
-    st.session_state.stato_giornaliero = df_giorno
-
-# --- MENU DI NAVIGAZIONE A SINISTRA ---
+# --- MENU DI NAVIGAZIONE E BOTTONE SALVA FISSO NELLA SIDEBAR ---
 menu = ["📋 Tabellone Presenze", "🚐 Anagrafica Furgoni", "👥 Anagrafica Personale"]
 scelta = st.sidebar.selectbox("Navigazione", menu)
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("💾 Salvataggio Dati")
+if st.sidebar.button("💾 SALVA SU DATABASE", use_container_width=True, type="primary"):
+    salva_database_json()
+    st.sidebar.success("Database JSON salvato con successo!")
 
 # --- 1. TABELLONE PRESENZE ---
 if scelta == "📋 Tabellone Presenze":
     st.title("📋 Inserimento Presenze e Assegnazione Mezzi")
     
-    # Selezione della Data di Lavorazione
     data_lavorazione = st.date_input("Data di lavorazione del Piano Presenze", datetime.today())
     giorno = data_lavorazione.day
     anno = data_lavorazione.year
     mese_testo = MESI_ITA[data_lavorazione.month]
     data_formato_personalizzato = f"{giorno} {mese_testo} {anno}"
 
-    st.info("💡 Le modifiche al tabellone vengono salvate istantaneamente. Se assegni un furgone già occupato, il sistema lo libererà automaticamente dal vecchio giro.")
+    st.info("💡 Le modifiche vengono mantenute in memoria. Ricordati di cliccare sul tasto 'SALVA SU DATABASE' a sinistra prima di chiudere!")
     
     furgoni_attivi = st.session_state.furgoni[st.session_state.furgoni['DISPONIBILE'] != "GUASTO"]
     elenco_furgoni_tendina = ["Nessuno"] + (furgoni_attivi['MARCA'] + " " + furgoni_attivi['MODELLO'] + " [" + furgoni_attivi['TARGA'] + "]").tolist()
     
-    # CALLBACK DI SALVATAGGIO IMMEDIATO E CONTROLLO DUPLICATI FURGONI
     def salva_tabellone_giornaliero():
         if "editor_giornaliero_diretto" in st.session_state:
             edits = st.session_state["editor_giornaliero_diretto"]
             df_attuale = st.session_state.stato_giornaliero.copy()
             
-            # Applica le celle modificate direttamente nel DataFrame di Session State
             for row_idx, deltas in edits["edited_rows"].items():
                 for col, val in deltas.items():
                     df_attuale.iat[row_idx, df_attuale.columns.get_loc(col)] = val
             
-            # Controllo incrociato: Rileva se lo stesso mezzo è stato assegnato a più persone
-            # Se trova un duplicato, resetta a "Nessuno" il vecchio record
+            # Controllo incrociato duplicati furgoni
             for idx, row in df_attuale.iterrows():
                 nuovo_mezzo = row["MEZZO"]
                 if nuovo_mezzo != "Nessuno":
@@ -238,7 +274,6 @@ if scelta == "📋 Tabellone Presenze":
             
             st.session_state.stato_giornaliero = df_attuale
 
-    # Visualizzazione dell'editor collegato alla callback
     st.data_editor(
         st.session_state.stato_giornaliero,
         column_config={
@@ -267,7 +302,6 @@ if scelta == "📋 Tabellone Presenze":
         on_change=salva_tabellone_giornaliero
     )
 
-    # --- GENERAZIONE AUTOMATICA DEI 4 BLOCCHI DI OUTPUT ---
     df_correnti = st.session_state.stato_giornaliero
     blocco1 = df_correnti[df_correnti['STATO'] == "Presente (Giro Fisso)"][['COGNOME', 'NOME', 'CELLULARE', 'GIRO_FISSO', 'MEZZO', 'NOTE']]
     blocco2 = df_correnti[df_correnti['STATO'] == "Supporto Altra Filiale"][['COGNOME', 'NOME', 'CELLULARE', 'GIRO_SUPPORTO', 'MEZZO', 'NOTE']]
@@ -276,7 +310,7 @@ if scelta == "📋 Tabellone Presenze":
 
     st.markdown("---")
     
-    # --- FUNZIONI DI EXPORT FILE ---
+    # --- ESPORTAZIONE ECCEL / PDF ---
     def genera_excel_4_blocchi(data_label):
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -377,7 +411,6 @@ if scelta == "📋 Tabellone Presenze":
     nome_file_excel = f"Presenze {data_formato_personalizzato}.xlsx"
     nome_file_pdf = f"Presenze {data_formato_personalizzato}.pdf"
 
-    # --- BOTTONI DI DOWNLOAD ---
     col_x1, col_x2 = st.columns(2)
     with col_x1:
         st.download_button(
@@ -399,14 +432,30 @@ if scelta == "📋 Tabellone Presenze":
 # --- 2. SCHEDA ANAGRAFICA FURGONI ---
 elif scelta == "🚐 Anagrafica Furgoni":
     st.title("🚐 Anagrafica e Stato Mezzi Aziendali")
-    furgoni_tabella = st.data_editor(
+    
+    def salva_furgoni_edits():
+        if "tabella_gestione_furgoni" in st.session_state:
+            edits = st.session_state["tabella_gestione_furgoni"]
+            df_attuale = st.session_state.furgoni.copy()
+            for row_idx, deltas in edits["edited_rows"].items():
+                for col, val in deltas.items():
+                    df_attuale.iat[row_idx, df_attuale.columns.get_loc(col)] = val
+            if edits["deleted_rows"]:
+                df_attuale = df_attuale.drop(edits["deleted_rows"]).reset_index(drop=True)
+            if edits["added_rows"]:
+                for new_row in edits["added_rows"]:
+                    riga_pulita = {col: new_row.get(col, "") for col in df_attuale.columns}
+                    df_attuale = pd.concat([df_attuale, pd.DataFrame([riga_pulita])], ignore_index=True)
+            st.session_state.furgoni = df_attuale
+
+    st.data_editor(
         st.session_state.furgoni, 
         num_rows="dynamic", 
         column_config={"DISPONIBILE": st.column_config.SelectboxColumn("Disponibilità", options=["SI", "NO", "GUASTO"], required=True)},
         use_container_width=True,
-        key="tabella_gestione_furgoni"
+        key="tabella_gestione_furgoni",
+        on_change=salva_furgoni_edits
     )
-    st.session_state.furgoni = furgoni_tabella
 
 # --- 3. SCHEDA ANAGRAFICA PERSONALE ---
 elif scelta == "👥 Anagrafica Personale":
@@ -430,7 +479,7 @@ elif scelta == "👥 Anagrafica Personale":
             
             st.session_state.anagrafica_corrieri = df_attuale
             
-            # Sincronizza e allinea la lunghezza dello stato giornaliero per accogliere i nuovi autisti
+            # Sincronizzazione automatica della lunghezza del tabellone quotidiano
             df_nuovo = df_attuale.copy()
             df_nuovo = df_nuovo.merge(
                 st.session_state.stato_giornaliero[['COGNOME', 'NOME', 'STATO', 'GIRO_SUPPORTO', 'MEZZO', 'NOTE']], 
