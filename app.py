@@ -136,29 +136,28 @@ MESI_ITA = {
 # ─────────────────────────────────────────────────────────────────────────────
 # SALVATAGGIO / CARICAMENTO SUPABASE
 # ─────────────────────────────────────────────────────────────────────────────
-def _sb_cancella_tutto(tabella: str):
-    """Cancella tutti i record - usa id > 0 come filtro obbligatorio per Supabase."""
-    requests.delete(
-        _sb_url(tabella) + "?id=gt.0",
-        headers=SB_HEADERS
+def _sb_truncate(tabella: str):
+    """Svuota la tabella via SQL RPC (unico modo affidabile in Supabase)."""
+    requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/truncate_table",
+        headers={**SB_HEADERS, "Content-Type": "application/json"},
+        data=json.dumps({"table_name": tabella})
     )
 
 def _sb_inserisci(tabella: str, records: list):
     """Inserisce una lista di record nella tabella."""
     if not records:
         return
-    # Rimuovi la chiave 'id' se presente (e' auto-generata da Supabase)
     puliti = [{k: v for k, v in r.items() if k != "id"} for r in records]
-    r = requests.post(
+    requests.post(
         _sb_url(tabella),
         headers={**SB_HEADERS, "Content-Type": "application/json"},
         data=json.dumps(puliti)
     )
-    return r
 
 def _sb_upsert(tabella: str, records: list):
-    """Cancella tutti i record e reinserisce quelli aggiornati."""
-    _sb_cancella_tutto(tabella)
+    """Svuota la tabella e reinserisce i record aggiornati."""
+    _sb_truncate(tabella)
     _sb_inserisci(tabella, records)
 
 def _sb_leggi(tabella: str) -> list:
