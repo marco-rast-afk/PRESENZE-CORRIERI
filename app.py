@@ -8,6 +8,12 @@ from openpyxl.utils import get_column_letter
 
 st.set_page_config(page_title="Gestione Presenze Corrieri", layout="wide")
 
+# Dizionario per convertire il numero del mese nel nome in italiano maiuscolo
+MESI_ITA = {
+    1: "GENNAIO", 2: "FEBBRAIO", 3: "MARZO", 4: "APRILE", 5: "MAGGIO", 6: "GIUGNO",
+    7: "LUGLIO", 8: "AGOSTO", 9: "SETTEMBRE", 10: "OTTOBRE", 11: "NOVEMBRE", 12: "DICEMBRE"
+}
+
 # --- DATABASE INIZIALE (SESSION STATE) ---
 if 'furgoni' not in st.session_state:
     st.session_state.furgoni = pd.DataFrame([
@@ -106,8 +112,11 @@ if 'anagrafica_corrieri' not in st.session_state:
 
 if 'responsabili' not in st.session_state:
     st.session_state.responsabili = pd.DataFrame([
-        {"COGNOME": "ROSSI", "NOME": "LUIGI", "RUOLO": "Responsabile Logistica"},
-        {"COGNOME": "VERDI", "NOME": "MARCO", "RUOLO": "Supervisore di Turno"}
+        {"COGNOME": "STANGONI", "NOME": "MARCO", "RUOLO": "Responsabile Logistica"},
+        {"COGNOME": "DIOP", "NOME": "IBRA", "RUOLO": "Responsabile Logistica"},
+        {"COGNOME": "AMATUCCI", "NOME": "DAVIDE", "RUOLO": "Responsabile Mezzi"},
+        {"COGNOME": "CAMELI", "NOME": "CRISTIAN", "RUOLO": "Responsabile Mezzi"},
+        {"COGNOME": "CIAPICA", "NOME": "GIADA", "RUOLO": "Responsabile Documentazione"}
     ])
 
 # Struttura temporanea quotidiana
@@ -139,8 +148,12 @@ if scelta == "📋 Tabellone Presenze":
     
     # Selezione della Data di Lavorazione
     data_lavorazione = st.date_input("Data di lavorazione del Piano Presenze", datetime.today())
-    data_str_ita = data_lavorazione.strftime("%d/%m/%Y")     # Per le intestazioni interne
-    data_str_file = data_lavorazione.strftime("%Y-%m-%d")    # Per i nomi dei file salvati
+    
+    # Costruzione stringa data personalizzata (Es: "19 MAGGIO 2026")
+    giorno = data_lavorazione.day
+    anno = data_lavorazione.year
+    mese_testo = MESI_ITA[data_lavorazione.month]
+    data_formato_personalizzato = f"{giorno} {mese_testo} {anno}"
 
     st.markdown("I campi *Cognome, Nome, Cellulare e Giro Fisso* sono bloccati. Configura lo Stato, il Mezzo e le Note direttamente sulle righe attive.")
     
@@ -191,9 +204,11 @@ if scelta == "📋 Tabellone Presenze":
             blocco1.to_excel(writer, sheet_name='Piano Giornaliero', index=False, startrow=2)
             ws = writer.sheets['Piano Giornaliero']
             
-            # Intestazione con Data (Stile File Originale)
-            font_data_top = Font(name='Calibri', size=12, bold=True, color='1F4E78')
-            ws.cell(row=1, column=1, value=f"PIANO PRESENZE CORRIERI - DATA: {data_label}").font = font_data_top
+            # Intestazione con Data nello stile esatto del file di partenza
+            font_data_top = Font(name='Calibri', size=11, bold=True, color='000000')
+            ws.cell(row=1, column=2, value="PRESENZE CORRIERI").font = font_data_top
+            ws.cell(row=1, column=3, value=f"DATA: {data_label}").font = font_data_top
+            ws.cell(row=1, column=4, value="Filiale SDA PORTO D'ASCOLI").font = font_data_top
             
             font_titolo = Font(name='Calibri', size=11, bold=True, color='000000')
             font_header = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
@@ -279,12 +294,12 @@ if scelta == "📋 Tabellone Presenze":
         return bytes(pdf.output(dest='S'))
 
     # Dati pronti in memoria basati sulla data selezionata
-    excel_data = genera_excel_4_blocchi(data_str_ita)
-    pdf_data = genera_pdf_4_blocchi(data_str_ita)
+    excel_data = genera_excel_4_blocchi(data_formato_personalizzato)
+    pdf_data = genera_pdf_4_blocchi(data_formato_personalizzato)
 
-    # Nomi dei file dinamici formattati con la data selezionata
-    nome_file_excel = f"Presenze_{data_str_file}.xlsx"
-    nome_file_pdf = f"Presenze_{data_str_file}.pdf"
+    # Nomi dei file dinamici formattati esattamente come richiesto
+    nome_file_excel = f"Presenze {data_formato_personalizzato}.xlsx"
+    nome_file_pdf = f"Presenze {data_formato_personalizzato}.pdf"
 
     # --- INTERFACCIA PULSANTI DI ESPORTAZIONE ---
     col_x1, col_x2 = st.columns(2)
