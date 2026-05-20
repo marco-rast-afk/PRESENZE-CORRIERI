@@ -154,29 +154,31 @@ if scelta == "Assegnazione Quotidiana":
                 
         return output.getvalue()
 
-    def genera_pdf():
+def genera_pdf_4_blocchi():
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", "B", 14)
-        pdf.cell(0, 10, "REPORT PRESENZE E ASSEGNAZIONE MEZZI", ln=True, align="C")
-        pdf.ln(5)
+        pdf.cell(0, 10, "PIANO GIORNALIERO FLOTTA E PRESENZE CORRIERI", ln=True, align="C")
+        pdf.ln(4)
         
         def aggiungi_tabella_pdf(titolo, df):
-            pdf.set_font("Arial", "B", 11)
-            pdf.set_fill_color(230, 235, 245)
-            pdf.cell(0, 8, titolo, ln=True, fill=True)
+            pdf.set_font("Arial", "B", 10)
+            pdf.set_fill_color(225, 230, 240)
+            pdf.cell(0, 7, titolo, ln=True, fill=True)
             pdf.set_font("Arial", "", 9)
             if df.empty:
-                pdf.cell(0, 8, " Nessun dato registrato", ln=True)
+                pdf.cell(0, 7, " Nessun record registrato in questo blocco.", ln=True)
                 pdf.ln(3)
                 return
             
-            pdf.set_fill_color(31, 78, 120)
+            # Intestazioni tabella
+            pdf.set_fill_color(30, 75, 120)
             pdf.set_text_color(255, 255, 255)
             for col in df.columns:
                 pdf.cell(31, 7, str(col), border=1, fill=True)
             pdf.ln()
             
+            # Righe dati
             pdf.set_text_color(0, 0, 0)
             for _, riga in df.iterrows():
                 for col in df.columns:
@@ -186,9 +188,12 @@ if scelta == "Assegnazione Quotidiana":
 
         aggiungi_tabella_pdf("1. CORRIERI CON GIRO ASSOCIATO", blocco1)
         aggiungi_tabella_pdf("2. EVENTUALI CORRIERI IN SUPPORTO", blocco2)
-        aggiungi_tabella_pdf("3. NOMINATIVI RESPONSABILI", blocco3)
+        aggiungi_tabella_pdf("3. NOMINATIVI RESPONSABILI PRESENTI", blocco3)
         aggiungi_tabella_pdf("4. CORRIERI ASSENTI", blocco4)
-        return pdf.output(dest='S')
+        
+        # MODIFICA QUI: Forza l'output a diventare una stringa di byte nativa Python
+        pdf_output = pdf.output(dest='S')
+        return bytes(pdf_output)
 
     col_b1, col_b2, col_b3 = st.columns(3)
     with col_b1:
