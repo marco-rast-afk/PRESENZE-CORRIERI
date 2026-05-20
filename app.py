@@ -51,7 +51,7 @@ if 'anagrafica_corrieri' not in st.session_state:
         {"COGNOME": "SQUILLACE", "NOME": "MICHELE", "CELLULARE": "3404966459", "GIRO_FISSO": "23"},
         {"COGNOME": "CAPRIOTTI", "NOME": "CRISTIANO", "CELLULARE": "3452137376", "GIRO_FISSO": "24"},
         {"COGNOME": "VINCIGUERRA", "NOME": "VINCENZO", "CELLULARE": "3348361930", "GIRO_FISSO": "25"},
-        {"COGNOME": "AMANDONICO", "NOME": "DARIO", "CELLULARE": "3477784701", "GIRO_FISSO": "26"},
+        {"COGNOME": "AMANDONICO", "NARIO", "DARIO": "3477784701", "GIRO_FISSO": "26"},
         {"COGNOME": "DI PIETRO", "NOME": "SIMONE", "CELLULARE": "3484587690", "GIRO_FISSO": "27"},
         {"COGNOME": "LUCIANI", "NOME": "GIOVANNI", "CELLULARE": "3282063754", "GIRO_FISSO": "28"},
         {"COGNOME": "DE SIMONE", "NOME": "ANTONIO", "CELLULARE": "3472316522", "GIRO_FISSO": "29"},
@@ -112,14 +112,11 @@ if 'anagrafica_corrieri' not in st.session_state:
 
 if 'responsabili' not in st.session_state:
     st.session_state.responsabili = pd.DataFrame([
-        {"COGNOME": "STANGONI", "NOME": "MARCO", "RUOLO": "Responsabile Logistica"},
-        {"COGNOME": "DIOP", "NOME": "IBRA", "RUOLO": "Responsabile Logistica"},
-        {"COGNOME": "AMATUCCI", "NOME": "DAVIDE", "RUOLO": "Responsabile Mezzi"},
-        {"COGNOME": "CAMELI", "NOME": "CRISTIAN", "RUOLO": "Responsabile Mezzi"},
-        {"COGNOME": "CIAPICA", "NOME": "GIADA", "RUOLO": "Responsabile Documentazione"}
+        {"COGNOME": "ROSSI", "NOME": "LUIGI", "RUOLO": "Responsabile Logistica"},
+        {"COGNOME": "VERDI", "NOME": "MARCO", "RUOLO": "Supervisore di Turno"}
     ])
 
-# Struttura temporanea quotidiana
+# Struttura permanente quotidiana (mantiene i dati salvati)
 if 'stato_giornaliero' not in st.session_state:
     df_giorno = st.session_state.anagrafica_corrieri.copy()
     df_giorno["STATO"] = "Presente (Giro Fisso)"
@@ -128,7 +125,7 @@ if 'stato_giornaliero' not in st.session_state:
     df_giorno["NOTE"] = ""
     st.session_state.stato_giornaliero = df_giorno
 
-# Sincronizzazione dinamica del tabellone
+# Sincronizzazione dinamica del tabellone in caso di modifiche in anagrafica fissa
 if len(st.session_state.stato_giornaliero) != len(st.session_state.anagrafica_corrieri):
     df_nuovo = st.session_state.anagrafica_corrieri.copy()
     df_nuovo = df_nuovo.merge(st.session_state.stato_giornaliero[['COGNOME', 'NOME', 'STATO', 'GIRO_SUPPORTO', 'MEZZO', 'NOTE']], on=['COGNOME', 'NOME'], how='left')
@@ -149,17 +146,17 @@ if scelta == "📋 Tabellone Presenze":
     # Selezione della Data di Lavorazione
     data_lavorazione = st.date_input("Data di lavorazione del Piano Presenze", datetime.today())
     
-    # Costruzione stringa data personalizzata (Es: "19 MAGGIO 2026")
     giorno = data_lavorazione.day
     anno = data_lavorazione.year
     mese_testo = MESI_ITA[data_lavorazione.month]
     data_formato_personalizzato = f"{giorno} {mese_testo} {anno}"
 
-    st.markdown("I campi *Cognome, Nome, Cellulare e Giro Fisso* sono bloccati. Configura lo Stato, il Mezzo e le Note direttamente sulle righe attive.")
+    st.info("💡 I dati rimangono memorizzati dal giorno precedente. Se riassegni un furgone già occupato, il sistema lo rimuoverà automaticamente dal vecchio giro per evitare duplicati.")
     
     furgoni_attivi = st.session_state.furgoni[st.session_state.furgoni['DISPONIBILE'] != "GUASTO"]
     elenco_furgoni_tendina = ["Nessuno"] + (furgoni_attivi['MARCA'] + " " + furgoni_attivi['MODELLO'] + " [" + furgoni_attivi['TARGA'] + "]").tolist()
     
+    # Visualizzazione dell'editor
     tabellone_modificato = st.data_editor(
         st.session_state.stato_giornaliero,
         column_config={
@@ -186,7 +183,26 @@ if scelta == "📋 Tabellone Presenze":
         use_container_width=True,
         key="editor_giornaliero_diretto"
     )
-    st.session_state.stato_giornaliero = tabellone_modificato
+
+    # --- LOGICA DI CONTROLLO RILEVAMENTO DUPLICATI IN TEMPO REALE ---
+    # Confrontiamo lo stato vecchio con quello appena modificato per trovare quale riga è cambiata
+    if not tabellone_modificato.equals(st.session_state.stato_giornaliero):
+        for idx, row in tabellone_modificato.iterrows():
+            vecchio_mezzo = st.session_state.stato_giornaliero.at[idx, "MEZZO"]
+            nuovo_mezzo = row["MEZZO"]
+            
+            # Se l'utente ha modificato il furgone assegnandone uno reale (diverso da "Nessuno")
+            if nuovo_mezzo != vecchio_mezzo and nuovo_mezzo != "Nessuno":
+                # Cerchiamo se questo mezzo è presente in ALTRE righe oltre a quella modificata
+                for alt_idx, alt_row in tabellone_modificato.iterrows():
+                    if alt_idx != idx and alt_row["MEZZO"] == nuovo_mezzo:
+                        # Rilevato duplicato! Lo impostiamo a "Nessuno" nella vecchia riga
+                        tabellone_modificato.at[alt_idx, "MEZZO"] = "Nessuno"
+                        st.toast(f"⚠️ Mezzo {nuovo_mezzo} rimosso automaticamente dal Giro {alt_row['GIRO_FISSO']} (Riassegnato a Giro {row['GIRO_FISSO']})")
+        
+        # Salviamo lo stato aggiornato e pulito dai duplicati
+        st.session_state.stato_giornaliero = tabellone_modificato
+        st.rerun()
 
     # --- GENERAZIONE AUTOMATICA DEI 4 BLOCCHI DI OUTPUT ---
     df_correnti = st.session_state.stato_giornaliero
@@ -204,7 +220,6 @@ if scelta == "📋 Tabellone Presenze":
             blocco1.to_excel(writer, sheet_name='Piano Giornaliero', index=False, startrow=2)
             ws = writer.sheets['Piano Giornaliero']
             
-            # Intestazione con Data nello stile esatto del file di partenza
             font_data_top = Font(name='Calibri', size=11, bold=True, color='000000')
             ws.cell(row=1, column=2, value="PRESENZE CORRIERI").font = font_data_top
             ws.cell(row=1, column=3, value=f"DATA: {data_label}").font = font_data_top
@@ -293,11 +308,9 @@ if scelta == "📋 Tabellone Presenze":
         aggiungi_tabella_pdf("4. CORRIERI ASSENTI", blocco4)
         return bytes(pdf.output(dest='S'))
 
-    # Dati pronti in memoria basati sulla data selezionata
     excel_data = genera_excel_4_blocchi(data_formato_personalizzato)
     pdf_data = genera_pdf_4_blocchi(data_formato_personalizzato)
 
-    # Nomi dei file dinamici formattati esattamente come richiesto
     nome_file_excel = f"Presenze {data_formato_personalizzato}.xlsx"
     nome_file_pdf = f"Presenze {data_formato_personalizzato}.pdf"
 
