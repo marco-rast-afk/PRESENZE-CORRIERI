@@ -15,12 +15,85 @@ MESI_ITA = {
 }
 
 # --- DATABASE INIZIALE (SESSION STATE) ---
+# ANAGRAFICA COMPLETA DEI TUOI 84 FURGONI
 if 'furgoni' not in st.session_state:
     st.session_state.furgoni = pd.DataFrame([
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EP800MZ", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EX184SW", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EX804EN", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EX805EN", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FA395MK", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FD357DK", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FJ898TP", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FN446DZ", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FP750ED", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FR953KJ", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FX735HG", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FX845YP", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "FX883NS", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GC957VZ", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF235BK", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF237BK", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF238BK", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF239BK", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GF298BK", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG111WM", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG112WM", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG149WM", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG150WM", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG151WM", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG184WM", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG187WM", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GG188WM", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GH880BE", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GL849VF", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GL850VF", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GL851VF", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GN724ES", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GN728ES", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GP529LX", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR250RF", "DISPONIBILE": "SI"},
         {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR256RF", "DISPONIBILE": "SI"},
-        {"MARCA": "Ford", "MODELLO": "Transit", "TIPO": "Furgone", "TARGA": "GS557WM", "DISPONIBILE": "SI"},
-        {"MARCA": "Iveco", "MODELLO": "Daily", "TIPO": "Furgone", "TARGA": "HB683CE", "DISPONIBILE": "NO"},
-        {"MARCA": "Mercedes", "MODELLO": "Sprinter", "TIPO": "Furgone", "TARGA": "HB787TS", "DISPONIBILE": "GUASTO"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR450EF", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR452EF", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR474EF", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GR964MV", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS386TT", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS387TT", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS554WM", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS556WM", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GS557WM", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GT874LE", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX245HJ", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX250HJ", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX300XE", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX301XE", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX322TJ", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX358HJ", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX363HJ", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX582FK", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX831FN", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX837FN", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GX852FN", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "GY571FV", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HA062CS", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HA385CY", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HA386CY", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HA902CR", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB659CE", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB662CE", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB683CE", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB783TS", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB784TS", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB785TS", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB786TS", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB787TS", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB788TS", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB789TS", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB790TS", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB792TS", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HB793TS", "DISPONIBILE": "SI"},
+        {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HC627CS", "DISPONIBILE": "SI"},
     ])
 
 # ANAGRAFICA PERSONALE AUTOMATIZZATA CON TUTTI I TUOI CORRIERI
@@ -185,22 +258,17 @@ if scelta == "📋 Tabellone Presenze":
     )
 
     # --- LOGICA DI CONTROLLO RILEVAMENTO DUPLICATI IN TEMPO REALE ---
-    # Confrontiamo lo stato vecchio con quello appena modificato per trovare quale riga è cambiata
     if not tabellone_modificato.equals(st.session_state.stato_giornaliero):
         for idx, row in tabellone_modificato.iterrows():
             vecchio_mezzo = st.session_state.stato_giornaliero.at[idx, "MEZZO"]
             nuovo_mezzo = row["MEZZO"]
             
-            # Se l'utente ha modificato il furgone assegnandone uno reale (diverso da "Nessuno")
             if nuovo_mezzo != vecchio_mezzo and nuovo_mezzo != "Nessuno":
-                # Cerchiamo se questo mezzo è presente in ALTRE righe oltre a quella modificata
                 for alt_idx, alt_row in tabellone_modificato.iterrows():
                     if alt_idx != idx and alt_row["MEZZO"] == nuovo_mezzo:
-                        # Rilevato duplicato! Lo impostiamo a "Nessuno" nella vecchia riga
                         tabellone_modificato.at[alt_idx, "MEZZO"] = "Nessuno"
                         st.toast(f"⚠️ Mezzo {nuovo_mezzo} rimosso automaticamente dal Giro {alt_row['GIRO_FISSO']} (Riassegnato a Giro {row['GIRO_FISSO']})")
         
-        # Salviamo lo stato aggiornato e pulito dai duplicati
         st.session_state.stato_giornaliero = tabellone_modificato
         st.rerun()
 
