@@ -136,23 +136,41 @@ MESI_ITA = {
 # ─────────────────────────────────────────────────────────────────────────────
 # SALVATAGGIO / CARICAMENTO SUPABASE
 # ─────────────────────────────────────────────────────────────────────────────
+def _sb_cancella_tutto(tabella: str):
+    """Cancella tutti i record - usa id > 0 come filtro obbligatorio per Supabase."""
+    requests.delete(
+        _sb_url(tabella) + "?id=gt.0",
+        headers=SB_HEADERS
+    )
+
+def _sb_inserisci(tabella: str, records: list):
+    """Inserisce una lista di record nella tabella."""
+    if not records:
+        return
+    # Rimuovi la chiave 'id' se presente (e' auto-generata da Supabase)
+    puliti = [{k: v for k, v in r.items() if k != "id"} for r in records]
+    r = requests.post(
+        _sb_url(tabella),
+        headers={**SB_HEADERS, "Content-Type": "application/json"},
+        data=json.dumps(puliti)
+    )
+    return r
+
 def _sb_upsert(tabella: str, records: list):
-    """Cancella tutti i record della tabella e inserisce quelli nuovi."""
-    # DELETE tutti
-    requests.delete(_sb_url(tabella), headers=SB_HEADERS)
-    # INSERT nuovi (solo se ci sono record)
-    if records:
-        requests.post(
-            _sb_url(tabella),
-            headers={**SB_HEADERS, "Prefer": "resolution=merge-duplicates"},
-            data=json.dumps(records)
-        )
+    """Cancella tutti i record e reinserisce quelli aggiornati."""
+    _sb_cancella_tutto(tabella)
+    _sb_inserisci(tabella, records)
 
 def _sb_leggi(tabella: str) -> list:
     """Legge tutti i record di una tabella Supabase."""
-    r = requests.get(_sb_url(tabella), headers=SB_HEADERS)
+    r = requests.get(
+        _sb_url(tabella) + "?order=id.asc",
+        headers=SB_HEADERS
+    )
     if r.status_code == 200:
-        return r.json()
+        rows = r.json()
+        # Rimuovi colonna 'id' (auto-generata, non serve nel DataFrame)
+        return [{k: v for k, v in row.items() if k != "id"} for row in rows]
     return []
 
 def salva_database_json():
@@ -162,6 +180,7 @@ def salva_database_json():
         _sb_upsert("anagrafica_corrieri", st.session_state.anagrafica_corrieri.to_dict(orient="records"))
         _sb_upsert("responsabili",        st.session_state.responsabili.to_dict(orient="records"))
         _sb_upsert("stato_giornaliero",   st.session_state.stato_giornaliero.to_dict(orient="records"))
+        st.sidebar.success("Salvato su Supabase!")
         return True
     except Exception as e:
         st.error(f"Errore salvataggio Supabase: {e}")
@@ -174,8 +193,8 @@ def carica_database_json():
         corrieri  = _sb_leggi("anagrafica_corrieri")
         resp      = _sb_leggi("responsabili")
         giorno    = _sb_leggi("stato_giornaliero")
-        if furgoni or corrieri:  # dati presenti
-            st.session_state.furgoni              = pd.DataFrame(furgoni)   if furgoni  else pd.DataFrame()
+        if furgoni or corrieri:
+            st.session_state.furgoni              = pd.DataFrame(furgoni)
             st.session_state.anagrafica_corrieri  = pd.DataFrame(corrieri)  if corrieri else pd.DataFrame()
             st.session_state.responsabili         = pd.DataFrame(resp)      if resp     else pd.DataFrame()
             st.session_state.stato_giornaliero    = pd.DataFrame(giorno)    if giorno   else pd.DataFrame()
