@@ -185,8 +185,11 @@ if 'anagrafica_corrieri' not in st.session_state:
 
 if 'responsabili' not in st.session_state:
     st.session_state.responsabili = pd.DataFrame([
-        {"COGNOME": "ROSSI", "NOME": "LUIGI", "RUOLO": "Responsabile Logistica"},
-        {"COGNOME": "VERDI", "NOME": "MARCO", "RUOLO": "Supervisore di Turno"}
+        {"COGNOME": "STANGONI", "NOME": "MARCO", "RUOLO": "Responsabile Logistica"},
+        {"COGNOME": "DIOP", "NOME": "IBRA", "RUOLO": "Responsabile Logistica"},
+        {"COGNOME": "AMATUCCI", "NOME": "DAVIDE", "RUOLO": "Responsabile Mezzi"},
+        {"COGNOME": "CAMELI", "NOME": "CRISTIAN", "RUOLO": "Responsabile Mezzi"},
+        {"COGNOME": "CIAPICA", "NOME": "GIADA", "RUOLO": "Responsabile"}
     ])
 
 # Struttura permanente quotidiana (mantiene i dati salvati)
