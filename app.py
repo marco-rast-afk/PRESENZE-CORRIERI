@@ -51,6 +51,67 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# CSS: celle compatte, griglia massimizzata, padding ridotto
+st.markdown("""
+<style>
+/* Riduci padding pagina per massimizzare spazio griglia */
+.block-container {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    max-width: 100% !important;
+}
+
+/* Celle griglia piu basse */
+div[data-testid="stDataFrame"] td,
+div[data-testid="stDataFrame"] th {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+    line-height: 1.2 !important;
+    font-size: 0.82rem !important;
+    white-space: nowrap !important;
+}
+
+/* Altezza riga minima */
+div[data-testid="stDataFrame"] tr {
+    min-height: 24px !important;
+    height: 24px !important;
+}
+
+/* Data editor celle compatte */
+div[data-testid="stDataEditor"] td,
+div[data-testid="stDataEditor"] th {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+    line-height: 1.2 !important;
+    font-size: 0.82rem !important;
+}
+
+div[data-testid="stDataEditor"] tr {
+    min-height: 24px !important;
+    height: 24px !important;
+}
+
+/* Riduci spazio date input e altri widget sopra la griglia */
+div[data-testid="stDateInput"] {
+    margin-bottom: 4px !important;
+}
+
+/* Nascondi header Streamlit per piu spazio */
+header[data-testid="stHeader"] {
+    height: 0 !important;
+    min-height: 0 !important;
+    visibility: hidden !important;
+}
+
+/* Riduci margini tra elementi */
+div[data-testid="stVerticalBlock"] > div {
+    gap: 0.25rem !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SUPABASE CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
@@ -391,6 +452,9 @@ if scelta == "📋 Tabellone Presenze":
 
             st.session_state.stato_giornaliero = df_attuale
 
+    n_righe = len(st.session_state.stato_giornaliero)
+    altezza_griglia = max(300, n_righe * 35 + 38)  # 35px per riga + header 38px
+
     st.data_editor(
         st.session_state.stato_giornaliero,
         column_config={
@@ -415,6 +479,7 @@ if scelta == "📋 Tabellone Presenze":
         },
         hide_index=True,
         use_container_width=True,
+        height=altezza_griglia,
         key="editor_giornaliero_diretto",
         on_change=salva_tabellone_giornaliero
     )
