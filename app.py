@@ -2,9 +2,7 @@ import streamlit as st
 import pandas as pd
 from fpdf import FPDF
 import io
-import os
-import webbrowser
-import urllib.parse
+from datetime import datetime
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
@@ -112,9 +110,6 @@ if 'responsabili' not in st.session_state:
         {"COGNOME": "VERDI", "NOME": "MARCO", "RUOLO": "Supervisore di Turno"}
     ])
 
-if 'config_mail' not in st.session_state:
-    st.session_state.config_mail = {"destinatari": "ufficio.logistica@esempio.com"}
-
 # Struttura temporanea quotidiana
 if 'stato_giornaliero' not in st.session_state:
     df_giorno = st.session_state.anagrafica_corrieri.copy()
@@ -135,12 +130,18 @@ if len(st.session_state.stato_giornaliero) != len(st.session_state.anagrafica_co
     st.session_state.stato_giornaliero = df_nuovo
 
 # --- MENU DI NAVIGAZIONE A SINISTRA ---
-menu = ["📋 Tabellone Presenze", "🚐 Anagrafica Furgoni", "👥 Anagrafica Personale", "⚙️ Configurazione Mail"]
+menu = ["📋 Tabellone Presenze", "🚐 Anagrafica Furgoni", "👥 Anagrafica Personale"]
 scelta = st.sidebar.selectbox("Navigazione", menu)
 
 # --- 1. TABELLONE PRESENZE SNELLO ---
 if scelta == "📋 Tabellone Presenze":
     st.title("📋 Inserimento Presenze e Assegnazione Mezzi")
+    
+    # Selezione della Data di Lavorazione
+    data_lavorazione = st.date_input("Data di lavorazione del Piano Presenze", datetime.today())
+    data_str_ita = data_lavorazione.strftime("%d/%m/%Y")     # Per le intestazioni interne
+    data_str_file = data_lavorazione.strftime("%Y-%m-%d")    # Per i nomi dei file salvati
+
     st.markdown("I campi *Cognome, Nome, Cellulare e Giro Fisso* sono bloccati. Configura lo Stato, il Mezzo e le Note direttamente sulle righe attive.")
     
     furgoni_attivi = st.session_state.furgoni[st.session_state.furgoni['DISPONIBILE'] != "GUASTO"]
@@ -184,11 +185,16 @@ if scelta == "📋 Tabellone Presenze":
     st.markdown("---")
     
     # --- GENERAZIONE DEI FLUSSI PER I FILE ---
-    def genera_excel_4_blocchi():
+    def genera_excel_4_blocchi(data_label):
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            blocco1.to_excel(writer, sheet_name='Piano Giornaliero', index=False, startrow=1)
+            blocco1.to_excel(writer, sheet_name='Piano Giornaliero', index=False, startrow=2)
             ws = writer.sheets['Piano Giornaliero']
+            
+            # Intestazione con Data (Stile File Originale)
+            font_data_top = Font(name='Calibri', size=12, bold=True, color='1F4E78')
+            ws.cell(row=1, column=1, value=f"PIANO PRESENZE CORRIERI - DATA: {data_label}").font = font_data_top
+            
             font_titolo = Font(name='Calibri', size=11, bold=True, color='000000')
             font_header = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
             fill_header = PatternFill(start_color='1F4E78', end_color='1F4E78', fill_type='solid') 
@@ -221,24 +227,29 @@ if scelta == "📋 Tabellone Presenze":
                     curr_row += 1
                 return curr_row + 2 
 
-            ws.delete_rows(1, ws.max_row+20)
-            prossima_riga = 2
+            ws.delete_rows(3, ws.max_row+20)
+            prossima_riga = 3
             prossima_riga = scrivi_blocco_excel(ws, blocco1, "1° BLOCCO: CORRIERI CON NUMERO DI GIRO ASSOCIATO", prossima_riga)
             prossima_riga = scrivi_blocco_excel(ws, blocco2, "2° BLOCCO: CORRIERI IN SUPPORTO ALTRA FILIALE", prossima_riga)
             prossima_riga = scrivi_blocco_excel(ws, blocco3, "3° BLOCCO: NOMINATIVI RESPONSABILI PRESENTI", prossima_riga)
             prossima_riga = scrivi_blocco_excel(ws, blocco4, "4° BLOCCO: CORRIERI ASSENTI", prossima_riga)
+            
             for col in ws.columns:
                 max_len = max(len(str(cell.value or '')) for cell in col)
                 col_letter = get_column_letter(col[0].column)
                 ws.column_dimensions[col_letter].width = max(max_len + 4, 13)
         return output.getvalue()
 
-    def genera_pdf_4_blocchi():
+    def genera_pdf_4_blocchi(data_label):
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", "B", 14)
-        pdf.cell(0, 10, "PIANO GIORNALIERO FLOTTA E PRESENZE CORRIERI", align="C")
+        pdf.cell(0, 10, f"PIANO GIORNALIERO FLOTTA E PRESENZE CORRIERI", align="C")
+        pdf.ln(6)
+        pdf.set_font("Arial", "I", 11)
+        pdf.cell(0, 10, f"Data di lavorazione: {data_label}", align="C")
         pdf.ln(12) 
+        
         def aggiungi_tabella_pdf(titolo, df):
             pdf.set_font("Arial", "B", 10)
             pdf.set_fill_color(225, 230, 240)
@@ -260,44 +271,39 @@ if scelta == "📋 Tabellone Presenze":
                     pdf.cell(31, 7, str(riga[col])[:16], border=1)
                 pdf.ln(7) 
             pdf.ln(4)
+            
         aggiungi_tabella_pdf("1. CORRIERI CON GIRO ASSOCIATO", blocco1)
         aggiungi_tabella_pdf("2. EVENTUALI CORRIERI IN SUPPORTO", blocco2)
         aggiungi_tabella_pdf("3. NOMINATIVI RESPONSABILI PRESENTI", blocco3)
         aggiungi_tabella_pdf("4. CORRIERI ASSENTI", blocco4)
         return bytes(pdf.output(dest='S'))
 
+    # Dati pronti in memoria basati sulla data selezionata
+    excel_data = genera_excel_4_blocchi(data_str_ita)
+    pdf_data = genera_pdf_4_blocchi(data_str_ita)
+
+    # Nomi dei file dinamici formattati con la data selezionata
+    nome_file_excel = f"Presenze_{data_str_file}.xlsx"
+    nome_file_pdf = f"Presenze_{data_str_file}.pdf"
+
     # --- INTERFACCIA PULSANTI DI ESPORTAZIONE ---
-    col_x1, col_x2, col_x3 = st.columns(3)
+    col_x1, col_x2 = st.columns(2)
     with col_x1:
-        st.download_button("📥 Scarica Report Excel", data=genera_excel_4_blocchi(), file_name="piano_presenze.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        st.download_button(
+            label=f"📥 Scarica Excel ({nome_file_excel})", 
+            data=excel_data, 
+            file_name=nome_file_excel, 
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
     with col_x2:
-        st.download_button("📥 Scarica PDF Pronto Stampa", data=genera_pdf_4_blocchi(), file_name="piano_presenze.pdf", mime="application/pdf")
-    with col_x3:
-        if st.button("✉️ Prepara Mail su Outlook"):
-            # Generazione del testo ed encodizzazione dell'URL
-            destinatari = st.session_state.config_mail['destinatari']
-            oggetto = "Piano Giornaliero Flotta e Presenze Corrieri"
-            corpo_testo = "Buongiorno,\n\nsi trasmette in allegato il piano giornaliero riguardante le presenze dei corrieri e l'assegnazione della flotta mezzi aggiornato.\n\nCordiali saluti."
-            
-            oggetto_encoded = urllib.parse.quote(oggetto)
-            corpo_encoded = urllib.parse.quote(corpo_testo)
-            
-            # Link mailto standard che apre in sicurezza Outlook
-            mailto_link = f"mailto:{destinatari}?subject={oggetto_encoded}&body={corpo_encoded}"
-            webbrowser.open(mailto_link)
-            
-            # Salvataggio file locali d'appoggio per un veloce Drag&Drop
-            cartella_utente = os.path.join(os.path.expanduser("~"), "Downloads")
-            path_excel = os.path.join(cartella_utente, "piano_presenze.xlsx")
-            path_pdf = os.path.join(cartella_utente, "piano_presenze.pdf")
-            
-            with open(path_excel, "wb") as f:
-                f.write(genera_excel_4_blocchi())
-            with open(path_pdf, "wb") as f:
-                f.write(genera_pdf_4_blocchi())
-                
-            st.success("Outlook aperto con successo!")
-            st.info(f"💡 **I file sono pronti!** Trascina i file direttamente dalla tua cartella 'Download' dentro la mail di Outlook.")
+        st.download_button(
+            label=f"📥 Scarica PDF ({nome_file_pdf})", 
+            data=pdf_data, 
+            file_name=nome_file_pdf, 
+            mime="application/pdf",
+            use_container_width=True
+        )
 
 # --- 2. SCHEDA ANAGRAFICA FURGONI ---
 elif scelta == "🚐 Anagrafica Furgoni":
@@ -322,11 +328,3 @@ elif scelta == "👥 Anagrafica Personale":
     st.subheader("Anagrafica Fissa Responsabili / Capi Turno")
     responsabili_tabella = st.data_editor(st.session_state.responsabili, num_rows="dynamic", use_container_width=True, key="tabella_gestione_responsabili")
     st.session_state.responsabili = responsabili_tabella
-
-# --- 4. CONFIGURAZIONE MAIL ---
-elif scelta == "⚙️ Configurazione Mail":
-    st.title("⚙️ Configurazione Indirizzi di Spedizione")
-    email_salvate = st.text_input("Indirizzi Email Destinatari (separati da virgola)", value=st.session_state.config_mail["destinatari"])
-    if st.button("Salva Configurazione"):
-        st.session_state.config_mail["destinatari"] = email_salvate
-        st.success("Impostazioni salvate con successo!")
