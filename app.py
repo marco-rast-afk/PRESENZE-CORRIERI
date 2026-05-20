@@ -154,7 +154,7 @@ if scelta == "Assegnazione Quotidiana":
                 
         return output.getvalue()
 
-def genera_pdf_4_blocchi():
+	def genera_pdf_4_blocchi():
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", "B", 14)
@@ -176,14 +176,14 @@ def genera_pdf_4_blocchi():
             pdf.set_text_color(255, 255, 255)
             for col in df.columns:
                 pdf.cell(31, 7, str(col), border=1, fill=True)
-            pdf.ln()
+            pdf.ln(7) # CORRETTO: Aggiunto il valore di interlinea
             
             # Righe dati
             pdf.set_text_color(0, 0, 0)
             for _, riga in df.iterrows():
                 for col in df.columns:
                     pdf.cell(31, 7, str(riga[col])[:16], border=1)
-                pdf.ln()
+                pdf.ln(7) # CORRETTO: Aggiunto il valore di interlinea
             pdf.ln(4)
 
         aggiungi_tabella_pdf("1. CORRIERI CON GIRO ASSOCIATO", blocco1)
@@ -191,7 +191,6 @@ def genera_pdf_4_blocchi():
         aggiungi_tabella_pdf("3. NOMINATIVI RESPONSABILI PRESENTI", blocco3)
         aggiungi_tabella_pdf("4. CORRIERI ASSENTI", blocco4)
         
-        # MODIFICA QUI: Forza l'output a diventare una stringa di byte nativa Python
         pdf_output = pdf.output(dest='S')
         return bytes(pdf_output)
 
