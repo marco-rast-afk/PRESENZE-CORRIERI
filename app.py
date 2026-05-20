@@ -313,6 +313,11 @@ if 'database_caricato' not in st.session_state:
 # ─────────────────────────────────────────────────────────────────────────────
 # MENU DI NAVIGAZIONE E BOTTONE SALVA FISSO NELLA SIDEBAR
 # ─────────────────────────────────────────────────────────────────────────────
+# Inizializza chiavi export in session_state per evitare AttributeError
+for _k in ["excel_sidebar_data", "excel_sidebar_nome", "pdf_sidebar_data", "pdf_sidebar_nome"]:
+    if _k not in st.session_state:
+        st.session_state[_k] = None
+
 menu = ["📋 Tabellone Presenze", "🚐 Anagrafica Furgoni", "👥 Anagrafica Personale"]
 scelta = st.sidebar.selectbox("Navigazione", menu)
 
@@ -323,7 +328,7 @@ if st.sidebar.button("💾 SALVA SU DATABASE", use_container_width=True, type="p
     st.sidebar.success("Database JSON salvato con successo!")
 
 # ── ESPORTA (visibili solo nella scheda Tabellone) ──────────
-if scelta == "📋 Tabellone Presenze" and 'excel_sidebar_data' in st.session_state:
+if scelta == "📋 Tabellone Presenze" and st.session_state.get("excel_sidebar_data") is not None:
     st.sidebar.markdown("---")
     st.sidebar.subheader("📤 Esporta Piano")
     st.sidebar.download_button(
