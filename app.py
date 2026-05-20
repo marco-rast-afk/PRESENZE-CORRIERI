@@ -525,7 +525,7 @@ if scelta == "📋 Tabellone Presenze":
         aggiungi_tabella_pdf("2. EVENTUALI CORRIERI IN SUPPORTO",       blocco2)
         aggiungi_tabella_pdf("3. NOMINATIVI RESPONSABILI PRESENTI",     blocco3)
         aggiungi_tabella_pdf("4. CORRIERI ASSENTI",                     blocco4)
-        return bytes(pdf.output(dest='S'))
+        return bytes(pdf.output())
 
     st.session_state.excel_sidebar_data = genera_excel_4_blocchi(data_formato_personalizzato)
     st.session_state.pdf_sidebar_data   = genera_pdf_4_blocchi(data_formato_personalizzato)
