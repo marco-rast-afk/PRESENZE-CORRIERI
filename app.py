@@ -3,7 +3,7 @@ import pandas as pd
 from fpdf import FPDF
 import io
 import json
-import os
+import requests
 from datetime import datetime
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -51,8 +51,20 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# File JSON locale per il salvataggio permanente dei dati
-DB_FILE = "database_presenze.json"
+# ─────────────────────────────────────────────────────────────────────────────
+# SUPABASE CONFIG
+# ─────────────────────────────────────────────────────────────────────────────
+SUPABASE_URL = st.secrets["SUPABASE_URL"].rstrip("/")
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+SB_HEADERS = {
+    "apikey":        SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type":  "application/json",
+    "Prefer":        "return=minimal",
+}
+
+def _sb_url(tabella: str) -> str:
+    return f"{SUPABASE_URL}/rest/v1/{tabella}"
 
 # Dizionario per convertire il numero del mese nel nome in italiano maiuscolo
 MESI_ITA = {
@@ -61,37 +73,56 @@ MESI_ITA = {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SALVATAGGIO / CARICAMENTO JSON
+# SALVATAGGIO / CARICAMENTO SUPABASE
 # ─────────────────────────────────────────────────────────────────────────────
-def salva_database_json():
-    """Converte i DataFrame di session_state in dizionari e li scrive sul file JSON"""
-    data_to_save = {
-        "furgoni": st.session_state.furgoni.to_dict(orient="records"),
-        "anagrafica_corrieri": st.session_state.anagrafica_corrieri.to_dict(orient="records"),
-        "responsabili": st.session_state.responsabili.to_dict(orient="records"),
-        "stato_giornaliero": st.session_state.stato_giornaliero.to_dict(orient="records")
-    }
-    # FIX #10 – scrittura atomica: scrivi su file temporaneo, poi rinomina
-    tmp_file = DB_FILE + ".tmp"
-    with open(tmp_file, "w", encoding="utf-8") as f:
-        json.dump(data_to_save, f, ensure_ascii=False, indent=4)
-    os.replace(tmp_file, DB_FILE)
+def _sb_upsert(tabella: str, records: list):
+    """Cancella tutti i record della tabella e inserisce quelli nuovi."""
+    # DELETE tutti
+    requests.delete(_sb_url(tabella), headers=SB_HEADERS)
+    # INSERT nuovi (solo se ci sono record)
+    if records:
+        requests.post(
+            _sb_url(tabella),
+            headers={**SB_HEADERS, "Prefer": "resolution=merge-duplicates"},
+            data=json.dumps(records)
+        )
 
+def _sb_leggi(tabella: str) -> list:
+    """Legge tutti i record di una tabella Supabase."""
+    r = requests.get(_sb_url(tabella), headers=SB_HEADERS)
+    if r.status_code == 200:
+        return r.json()
+    return []
+
+def salva_database_json():
+    """Salva tutti i DataFrame su Supabase."""
+    try:
+        _sb_upsert("furgoni",            st.session_state.furgoni.to_dict(orient="records"))
+        _sb_upsert("anagrafica_corrieri", st.session_state.anagrafica_corrieri.to_dict(orient="records"))
+        _sb_upsert("responsabili",        st.session_state.responsabili.to_dict(orient="records"))
+        _sb_upsert("stato_giornaliero",   st.session_state.stato_giornaliero.to_dict(orient="records"))
+        return True
+    except Exception as e:
+        st.error(f"Errore salvataggio Supabase: {e}")
+        return False
 
 def carica_database_json():
-    """Carica i dati dal file JSON se esiste, altrimenti inizializza i dati di default"""
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                st.session_state.furgoni = pd.DataFrame(data["furgoni"])
-                st.session_state.anagrafica_corrieri = pd.DataFrame(data["anagrafica_corrieri"])
-                st.session_state.responsabili = pd.DataFrame(data["responsabili"])
-                st.session_state.stato_giornaliero = pd.DataFrame(data["stato_giornaliero"])
-                return True
-        except Exception as e:
-            st.error(f"Errore nel caricamento del database JSON: {e}. Caricamento dati predefiniti.")
-    return False
+    """Carica i dati da Supabase."""
+    try:
+        furgoni   = _sb_leggi("furgoni")
+        corrieri  = _sb_leggi("anagrafica_corrieri")
+        resp      = _sb_leggi("responsabili")
+        giorno    = _sb_leggi("stato_giornaliero")
+        if furgoni or corrieri:  # dati presenti
+            st.session_state.furgoni              = pd.DataFrame(furgoni)   if furgoni  else pd.DataFrame()
+            st.session_state.anagrafica_corrieri  = pd.DataFrame(corrieri)  if corrieri else pd.DataFrame()
+            st.session_state.responsabili         = pd.DataFrame(resp)      if resp     else pd.DataFrame()
+            st.session_state.stato_giornaliero    = pd.DataFrame(giorno)    if giorno   else pd.DataFrame()
+            return True
+        return False
+    except Exception as e:
+        st.error(f"Errore caricamento Supabase: {e}")
+        return False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -291,19 +322,34 @@ if st.sidebar.button("💾 SALVA SU DATABASE", use_container_width=True, type="p
     salva_database_json()
     st.sidebar.success("Database JSON salvato con successo!")
 
+# ── ESPORTA (visibili solo nella scheda Tabellone) ──────────
+if scelta == "📋 Tabellone Presenze" and 'excel_sidebar_data' in st.session_state:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📤 Esporta Piano")
+    st.sidebar.download_button(
+        label="📥 Excel",
+        data=st.session_state.excel_sidebar_data,
+        file_name=st.session_state.excel_sidebar_nome,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
+    st.sidebar.download_button(
+        label="📥 PDF",
+        data=st.session_state.pdf_sidebar_data,
+        file_name=st.session_state.pdf_sidebar_nome,
+        mime="application/pdf",
+        use_container_width=True
+    )
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. TABELLONE PRESENZE
 # ─────────────────────────────────────────────────────────────────────────────
 if scelta == "📋 Tabellone Presenze":
-    st.title("📋 Inserimento Presenze e Assegnazione Mezzi")
-
     data_lavorazione = st.date_input("Data di lavorazione del Piano Presenze", datetime.today())
     giorno = data_lavorazione.day
     anno = data_lavorazione.year
     mese_testo = MESI_ITA[data_lavorazione.month]
     data_formato_personalizzato = f"{giorno} {mese_testo} {anno}"
-
-    st.info("💡 Le modifiche vengono mantenute in memoria. Ricordati di cliccare sul tasto 'SALVA SU DATABASE' a sinistra prima di chiudere!")
 
     # FIX #4 – Ricalcola la lista furgoni ad ogni render così rispecchia sempre
     # lo stato attuale (anche dopo aggiunte/rimozioni nella scheda Furgoni)
@@ -376,8 +422,6 @@ if scelta == "📋 Tabellone Presenze":
     blocco3 = st.session_state.responsabili
     blocco4 = df_correnti[df_correnti['STATO'] == "Assente"][
         ['COGNOME', 'NOME', 'CELLULARE', 'NOTE']]
-
-    st.markdown("---")
 
     # ── ESPORTAZIONE EXCEL ────────────────────────────────────────────────────
     def genera_excel_4_blocchi(data_label):
@@ -478,36 +522,17 @@ if scelta == "📋 Tabellone Presenze":
         aggiungi_tabella_pdf("4. CORRIERI ASSENTI",                     blocco4)
         return bytes(pdf.output(dest='S'))
 
-    excel_data = genera_excel_4_blocchi(data_formato_personalizzato)
-    pdf_data   = genera_pdf_4_blocchi(data_formato_personalizzato)
+    st.session_state.excel_sidebar_data = genera_excel_4_blocchi(data_formato_personalizzato)
+    st.session_state.pdf_sidebar_data   = genera_pdf_4_blocchi(data_formato_personalizzato)
+    st.session_state.excel_sidebar_nome = f"Presenze {data_formato_personalizzato}.xlsx"
+    st.session_state.pdf_sidebar_nome   = f"Presenze {data_formato_personalizzato}.pdf"
 
-    nome_file_excel = f"Presenze {data_formato_personalizzato}.xlsx"
-    nome_file_pdf   = f"Presenze {data_formato_personalizzato}.pdf"
 
-    col_x1, col_x2 = st.columns(2)
-    with col_x1:
-        st.download_button(
-            label=f"📥 Scarica Excel ({nome_file_excel})",
-            data=excel_data,
-            file_name=nome_file_excel,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
-    with col_x2:
-        st.download_button(
-            label=f"📥 Scarica PDF ({nome_file_pdf})",
-            data=pdf_data,
-            file_name=nome_file_pdf,
-            mime="application/pdf",
-            use_container_width=True
-        )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. SCHEDA ANAGRAFICA FURGONI
 # ─────────────────────────────────────────────────────────────────────────────
 elif scelta == "🚐 Anagrafica Furgoni":
-    st.title("🚐 Anagrafica e Stato Mezzi Aziendali")
-
     def salva_furgoni_edits():
         if "tabella_gestione_furgoni" in st.session_state:
             edits = st.session_state["tabella_gestione_furgoni"]
@@ -540,9 +565,6 @@ elif scelta == "🚐 Anagrafica Furgoni":
 # 3. SCHEDA ANAGRAFICA PERSONALE
 # ─────────────────────────────────────────────────────────────────────────────
 elif scelta == "👥 Anagrafica Personale":
-    st.title("👥 Gestione Personale e Autisti")
-    st.subheader("Anagrafica Fissa Corrieri")
-
     def aggiorna_anagrafica_corrieri():
         if "tabella_gestione_corrieri" in st.session_state:
             edits = st.session_state["tabella_gestione_corrieri"]
@@ -597,4 +619,29 @@ elif scelta == "👥 Anagrafica Personale":
         use_container_width=True,
         key="tabella_gestione_corrieri",
         on_change=aggiorna_anagrafica_corrieri
+    )
+
+    st.markdown("#### 👔 Responsabili Presenti")
+
+    def aggiorna_responsabili():
+        if "tabella_responsabili" in st.session_state:
+            edits = st.session_state["tabella_responsabili"]
+            df_r = st.session_state.responsabili.copy()
+            for row_idx, deltas in edits["edited_rows"].items():
+                for col, val in deltas.items():
+                    df_r.iat[row_idx, df_r.columns.get_loc(col)] = val
+            if edits["deleted_rows"]:
+                df_r = df_r.drop(edits["deleted_rows"]).reset_index(drop=True)
+            if edits["added_rows"]:
+                for new_row in edits["added_rows"]:
+                    riga_pulita = {col: new_row.get(col, "") for col in df_r.columns}
+                    df_r = pd.concat([df_r, pd.DataFrame([riga_pulita])], ignore_index=True)
+            st.session_state.responsabili = df_r
+
+    st.data_editor(
+        st.session_state.responsabili,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="tabella_responsabili",
+        on_change=aggiorna_responsabili
     )
