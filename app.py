@@ -158,17 +158,23 @@ if scelta == "Assegnazione Quotidiana":
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", "B", 14)
-        pdf.cell(0, 10, "PIANO GIORNALIERO FLOTTA E PRESENZE CORRIERI", ln=True, align="C")
-        pdf.ln(4)
+        
+        # CORRETTO: rimosso ln=True che mandava in crash la libreria
+        pdf.cell(0, 10, "PIANO GIORNALIERO FLOTTA E PRESENZE CORRIERI", align="C")
+        pdf.ln(12) # Va a capo in sicurezza dopo il titolo
         
         def aggiungi_tabella_pdf(titolo, df):
             pdf.set_font("Arial", "B", 10)
             pdf.set_fill_color(225, 230, 240)
-            pdf.cell(0, 7, titolo, ln=True, fill=True)
+            
+            # CORRETTO: rimosso ln=True anche qui
+            pdf.cell(0, 7, titolo, fill=True)
+            pdf.ln(9) # Va a capo dopo il titolo del blocco
+            
             pdf.set_font("Arial", "", 9)
             if df.empty:
-                pdf.cell(0, 7, " Nessun record registrato in questo blocco.", ln=True)
-                pdf.ln(3)
+                pdf.cell(0, 7, " Nessun record registrato in questo blocco.")
+                pdf.ln(10)
                 return
             
             # Intestazioni tabella
@@ -176,14 +182,14 @@ if scelta == "Assegnazione Quotidiana":
             pdf.set_text_color(255, 255, 255)
             for col in df.columns:
                 pdf.cell(31, 7, str(col), border=1, fill=True)
-            pdf.ln(7) # CORRETTO: Aggiunto il valore di interlinea
+            pdf.ln(7) # Va a capo dopo l'intestazione
             
             # Righe dati
             pdf.set_text_color(0, 0, 0)
             for _, riga in df.iterrows():
                 for col in df.columns:
                     pdf.cell(31, 7, str(riga[col])[:16], border=1)
-                pdf.ln(7) # CORRETTO: Aggiunto il valore di interlinea
+                pdf.ln(7) # Va a capo dopo ogni riga di autista
             pdf.ln(4)
 
         aggiungi_tabella_pdf("1. CORRIERI CON GIRO ASSOCIATO", blocco1)
