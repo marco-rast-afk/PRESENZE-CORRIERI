@@ -15,7 +15,6 @@ MESI_ITA = {
 }
 
 # --- DATABASE INIZIALE (SESSION STATE) ---
-# ANAGRAFICA COMPLETA DEI TUOI 84 FURGONI
 if 'furgoni' not in st.session_state:
     st.session_state.furgoni = pd.DataFrame([
         {"MARCA": "Fiat", "MODELLO": "Ducato", "TIPO": "Furgone", "TARGA": "EP800MZ", "DISPONIBILE": "SI"},
@@ -96,7 +95,6 @@ if 'furgoni' not in st.session_state:
         {"MARCA": "Fiat", "MODELLO": "Mercedes", "TIPO": "Furgone", "TARGA": "HC627CS", "DISPONIBILE": "SI"},
     ])
 
-# ANAGRAFICA PERSONALE AUTOMATIZZATA CON TUTTI I TUOI CORRIERI
 if 'anagrafica_corrieri' not in st.session_state:
     st.session_state.anagrafica_corrieri = pd.DataFrame([
         {"COGNOME": "CROCI", "NOME": "MARINO", "CELLULARE": "3314509080", "GIRO_FISSO": "1"},
@@ -168,7 +166,7 @@ if 'anagrafica_corrieri' not in st.session_state:
         {"COGNOME": "GERMINI", "NOME": "MASSIMO", "CELLULARE": "3381174017", "GIRO_FISSO": "224"},
         {"COGNOME": "FELICIANI", "NOME": "MATTEO", "CELLULARE": "3459494394", "GIRO_FISSO": "225"},
         {"COGNOME": "PERSICO", "NOME": "GIADA", "CELLULARE": "3500750399", "GIRO_FISSO": "226"},
-        {"COGNOME": "MATJA", "NOME": "KLAUDIO", "CELLULARE": "3291692911", "GIRO_FISSO": "227"},
+        {"COGNOME": "MATJA", "KLAUDIO", "CELLULARE": "3291692911", "GIRO_FISSO": "227"},
         {"COGNOME": "ROTUNNO", "NOME": "DARIO", "CELLULARE": "3387710023", "GIRO_FISSO": "228"},
         {"COGNOME": "LANZA", "NOME": "CHRISTIAN", "CELLULARE": "3881680533", "GIRO_FISSO": "230"},
         {"COGNOME": "RUZZINI", "NOME": "ROBERTO", "CELLULARE": "3283797115", "GIRO_FISSO": "501"},
@@ -185,11 +183,8 @@ if 'anagrafica_corrieri' not in st.session_state:
 
 if 'responsabili' not in st.session_state:
     st.session_state.responsabili = pd.DataFrame([
-        {"COGNOME": "STANGONI", "NOME": "MARCO", "RUOLO": "Responsabile Logistica"},
-        {"COGNOME": "DIOP", "NOME": "IBRA", "RUOLO": "Responsabile Logistica"},
-        {"COGNOME": "AMATUCCI", "NOME": "DAVIDE", "RUOLO": "Responsabile Mezzi"},
-        {"COGNOME": "CAMELI", "NOME": "CRISTIAN", "RUOLO": "Responsabile Mezzi"},
-        {"COGNOME": "CIAPICA", "NOME": "GIADA", "RUOLO": "Responsabile"}
+        {"COGNOME": "ROSSI", "NOME": "LUIGI", "RUOLO": "Responsabile Logistica"},
+        {"COGNOME": "VERDI", "NOME": "MARCO", "RUOLO": "Supervisore di Turno"}
     ])
 
 # Struttura permanente quotidiana (mantiene i dati salvati)
@@ -201,39 +196,50 @@ if 'stato_giornaliero' not in st.session_state:
     df_giorno["NOTE"] = ""
     st.session_state.stato_giornaliero = df_giorno
 
-# Sincronizzazione dinamica del tabellone in caso di modifiche in anagrafica fissa
-if len(st.session_state.stato_giornaliero) != len(st.session_state.anagrafica_corrieri):
-    df_nuovo = st.session_state.anagrafica_corrieri.copy()
-    df_nuovo = df_nuovo.merge(st.session_state.stato_giornaliero[['COGNOME', 'NOME', 'STATO', 'GIRO_SUPPORTO', 'MEZZO', 'NOTE']], on=['COGNOME', 'NOME'], how='left')
-    df_nuovo["STATO"] = df_nuovo["STATO"].fillna("Presente (Giro Fisso)")
-    df_nuovo["GIRO_SUPPORTO"] = df_nuovo["GIRO_SUPPORTO"].fillna("")
-    df_nuovo["MEZZO"] = df_nuovo["MEZZO"].fillna("Nessuno")
-    df_nuovo["NOTE"] = df_nuovo["NOTE"].fillna("")
-    st.session_state.stato_giornaliero = df_nuovo
-
 # --- MENU DI NAVIGAZIONE A SINISTRA ---
 menu = ["📋 Tabellone Presenze", "🚐 Anagrafica Furgoni", "👥 Anagrafica Personale"]
 scelta = st.sidebar.selectbox("Navigazione", menu)
 
-# --- 1. TABELLONE PRESENZE SNELLO ---
+# --- 1. TABELLONE PRESENZE ---
 if scelta == "📋 Tabellone Presenze":
     st.title("📋 Inserimento Presenze e Assegnazione Mezzi")
     
     # Selezione della Data di Lavorazione
     data_lavorazione = st.date_input("Data di lavorazione del Piano Presenze", datetime.today())
-    
     giorno = data_lavorazione.day
     anno = data_lavorazione.year
     mese_testo = MESI_ITA[data_lavorazione.month]
     data_formato_personalizzato = f"{giorno} {mese_testo} {anno}"
 
-    st.info("💡 I dati rimangono memorizzati dal giorno precedente. Se riassegni un furgone già occupato, il sistema lo rimuoverà automaticamente dal vecchio giro per evitare duplicati.")
+    st.info("💡 Le modifiche al tabellone vengono salvate istantaneamente. Se assegni un furgone già occupato, il sistema lo libererà automaticamente dal vecchio giro.")
     
     furgoni_attivi = st.session_state.furgoni[st.session_state.furgoni['DISPONIBILE'] != "GUASTO"]
     elenco_furgoni_tendina = ["Nessuno"] + (furgoni_attivi['MARCA'] + " " + furgoni_attivi['MODELLO'] + " [" + furgoni_attivi['TARGA'] + "]").tolist()
     
-    # Visualizzazione dell'editor
-    tabellone_modificato = st.data_editor(
+    # CALLBACK DI SALVATAGGIO IMMEDIATO E CONTROLLO DUPLICATI FURGONI
+    def salva_tabellone_giornaliero():
+        if "editor_giornaliero_diretto" in st.session_state:
+            edits = st.session_state["editor_giornaliero_diretto"]
+            df_attuale = st.session_state.stato_giornaliero.copy()
+            
+            # Applica le celle modificate direttamente nel DataFrame di Session State
+            for row_idx, deltas in edits["edited_rows"].items():
+                for col, val in deltas.items():
+                    df_attuale.iat[row_idx, df_attuale.columns.get_loc(col)] = val
+            
+            # Controllo incrociato: Rileva se lo stesso mezzo è stato assegnato a più persone
+            # Se trova un duplicato, resetta a "Nessuno" il vecchio record
+            for idx, row in df_attuale.iterrows():
+                nuovo_mezzo = row["MEZZO"]
+                if nuovo_mezzo != "Nessuno":
+                    for alt_idx, alt_row in df_attuale.iterrows():
+                        if alt_idx != idx and alt_row["MEZZO"] == nuovo_mezzo:
+                            df_attuale.iat[alt_idx, df_attuale.columns.get_loc("MEZZO")] = "Nessuno"
+            
+            st.session_state.stato_giornaliero = df_attuale
+
+    # Visualizzazione dell'editor collegato alla callback
+    st.data_editor(
         st.session_state.stato_giornaliero,
         column_config={
             "COGNOME": st.column_config.TextColumn("Cognome", disabled=True),
@@ -257,23 +263,9 @@ if scelta == "📋 Tabellone Presenze":
         },
         hide_index=True,
         use_container_width=True,
-        key="editor_giornaliero_diretto"
+        key="editor_giornaliero_diretto",
+        on_change=salva_tabellone_giornaliero
     )
-
-    # --- LOGICA DI CONTROLLO RILEVAMENTO DUPLICATI IN TEMPO REALE ---
-    if not tabellone_modificato.equals(st.session_state.stato_giornaliero):
-        for idx, row in tabellone_modificato.iterrows():
-            vecchio_mezzo = st.session_state.stato_giornaliero.at[idx, "MEZZO"]
-            nuovo_mezzo = row["MEZZO"]
-            
-            if nuovo_mezzo != vecchio_mezzo and nuovo_mezzo != "Nessuno":
-                for alt_idx, alt_row in tabellone_modificato.iterrows():
-                    if alt_idx != idx and alt_row["MEZZO"] == nuovo_mezzo:
-                        tabellone_modificato.at[alt_idx, "MEZZO"] = "Nessuno"
-                        st.toast(f"⚠️ Mezzo {nuovo_mezzo} rimosso automaticamente dal Giro {alt_row['GIRO_FISSO']} (Riassegnato a Giro {row['GIRO_FISSO']})")
-        
-        st.session_state.stato_giornaliero = tabellone_modificato
-        st.rerun()
 
     # --- GENERAZIONE AUTOMATICA DEI 4 BLOCCHI DI OUTPUT ---
     df_correnti = st.session_state.stato_giornaliero
@@ -284,7 +276,7 @@ if scelta == "📋 Tabellone Presenze":
 
     st.markdown("---")
     
-    # --- GENERAZIONE DEI FLUSSI PER I FILE ---
+    # --- FUNZIONI DI EXPORT FILE ---
     def genera_excel_4_blocchi(data_label):
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -385,7 +377,7 @@ if scelta == "📋 Tabellone Presenze":
     nome_file_excel = f"Presenze {data_formato_personalizzato}.xlsx"
     nome_file_pdf = f"Presenze {data_formato_personalizzato}.pdf"
 
-    # --- INTERFACCIA PULSANTI DI ESPORTAZIONE ---
+    # --- BOTTONI DI DOWNLOAD ---
     col_x1, col_x2 = st.columns(2)
     with col_x1:
         st.download_button(
@@ -421,31 +413,24 @@ elif scelta == "👥 Anagrafica Personale":
     st.title("👥 Gestione Personale e Autisti")
     st.subheader("Anagrafica Fissa Corrieri")
     
-    # Funzione di callback per salvare IMMEDIATAMENTE e sincronizzare il tabellone presenze
     def aggiorna_anagrafica_corrieri():
         if "tabella_gestione_corrieri" in st.session_state:
             edits = st.session_state["tabella_gestione_corrieri"]
             df_attuale = st.session_state.anagrafica_corrieri.copy()
             
-            # 1. Gestione righe modificate
             for row_idx, deltas in edits["edited_rows"].items():
                 for col, val in deltas.items():
                     df_attuale.iat[row_idx, df_attuale.columns.get_loc(col)] = val
-            
-            # 2. Gestione righe eliminate
             if edits["deleted_rows"]:
                 df_attuale = df_attuale.drop(edits["deleted_rows"]).reset_index(drop=True)
-            
-            # 3. Gestione nuove righe aggiunte
             if edits["added_rows"]:
                 for new_row in edits["added_rows"]:
                     riga_pulita = {col: new_row.get(col, "") for col in df_attuale.columns}
                     df_attuale = pd.concat([df_attuale, pd.DataFrame([riga_pulita])], ignore_index=True)
             
-            # Salva l'anagrafica aggiornata
             st.session_state.anagrafica_corrieri = df_attuale
             
-            # Sincronizza lo stato giornaliero per non perdere i nuovi nomi nel tabellone
+            # Sincronizza e allinea la lunghezza dello stato giornaliero per accogliere i nuovi autisti
             df_nuovo = df_attuale.copy()
             df_nuovo = df_nuovo.merge(
                 st.session_state.stato_giornaliero[['COGNOME', 'NOME', 'STATO', 'GIRO_SUPPORTO', 'MEZZO', 'NOTE']], 
@@ -458,7 +443,6 @@ elif scelta == "👥 Anagrafica Personale":
             df_nuovo["NOTE"] = df_nuovo["NOTE"].fillna("")
             st.session_state.stato_giornaliero = df_nuovo
 
-    # Visualizza l'editor passando la callback su on_change
     st.data_editor(
         st.session_state.anagrafica_corrieri, 
         num_rows="dynamic", 
@@ -470,7 +454,6 @@ elif scelta == "👥 Anagrafica Personale":
     st.markdown("---")
     st.subheader("Anagrafica Fissa Responsabili / Capi Turno")
     
-    # Callback simile per i responsabili
     def aggiorna_responsabili():
         if "tabella_gestione_responsabili" in st.session_state:
             edits = st.session_state["tabella_gestione_responsabili"]
