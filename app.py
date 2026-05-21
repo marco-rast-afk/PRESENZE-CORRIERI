@@ -438,7 +438,24 @@ if scelta == "📋 Tabellone Presenze":
     # FIX #4 – Ricalcola la lista furgoni ad ogni render così rispecchia sempre
     # lo stato attuale (anche dopo aggiunte/rimozioni nella scheda Furgoni)
     furgoni_attivi = st.session_state.furgoni[st.session_state.furgoni['DISPONIBILE'] != "GUASTO"]
-    elenco_furgoni_tendina = ["Nessuno"] + furgoni_attivi['TARGA'].tolist()
+    tutte_targhe = furgoni_attivi['TARGA'].tolist()
+
+    # Calcola furgoni già assegnati nel tabellone corrente
+    mezzi_in_uso = set(
+        v for v in st.session_state.stato_giornaliero['MEZZO'].tolist()
+        if v and v != "Nessuno"
+    )
+    targhe_libere    = [t for t in tutte_targhe if t not in mezzi_in_uso]
+    targhe_assegnate = [t for t in tutte_targhe if t in mezzi_in_uso]
+
+    # Menu a tendina con separatori visivi: prima i liberi, poi i già assegnati
+    elenco_furgoni_tendina = (
+        ["Nessuno"]
+        + (["── NON ASSEGNATI ──"] if targhe_libere    else [])
+        + targhe_libere
+        + (["── GIÀ ASSEGNATI ──"] if targhe_assegnate else [])
+        + targhe_assegnate
+    )
 
     def salva_tabellone_giornaliero():
         if "editor_giornaliero_diretto" in st.session_state:
@@ -449,24 +466,35 @@ if scelta == "📋 Tabellone Presenze":
                 for col, val in deltas.items():
                     df_attuale.iat[row_idx, df_attuale.columns.get_loc(col)] = val
 
-            # FIX #3 – Controllo duplicati furgoni: invece di corrompere silenziosamente
-            # le altre righe, avvisa l'utente e ANNULLA la modifica appena fatta
-            mezzi_assegnati = {}
-            conflitto = False
-            for idx, row in df_attuale.iterrows():
-                m = row["MEZZO"]
-                if m != "Nessuno":
-                    if m in mezzi_assegnati:
-                        # Trova quale riga ha appena generato il conflitto e ripristina
-                        if idx in edits["edited_rows"] and "MEZZO" in edits["edited_rows"][idx]:
-                            df_attuale.iat[idx, df_attuale.columns.get_loc("MEZZO")] = \
-                                st.session_state.stato_giornaliero.iat[idx, st.session_state.stato_giornaliero.columns.get_loc("MEZZO")]
-                        else:
-                            df_attuale.iat[mezzi_assegnati[m], df_attuale.columns.get_loc("MEZZO")] = "Nessuno"
-                        conflitto = True
-                        st.warning(f"⚠️ Il furgone **{m}** era già assegnato a un altro corriere. L'assegnazione duplicata è stata annullata.")
-                    else:
-                        mezzi_assegnati[m] = idx
+            # ── ANTI-DUPLICATO FURGONI ────────────────────────────────────────
+            # Logica corretta:
+            # 1. Identifica le righe appena modificate con un nuovo MEZZO
+            # 2. Se quel mezzo era già presente su un'altra riga, libera QUELLA riga
+            #    (così la nuova assegnazione viene sempre rispettata)
+            righe_modificate_mezzo = {
+                row_idx: deltas["MEZZO"]
+                for row_idx, deltas in edits["edited_rows"].items()
+                if "MEZZO" in deltas
+            }
+
+            for riga_nuova, nuovo_mezzo in righe_modificate_mezzo.items():
+                if nuovo_mezzo in ("Nessuno", "── NON ASSEGNATI ──", "── GIÀ ASSEGNATI ──", ""):
+                    continue
+                # Cerca se lo stesso mezzo è presente su un'altra riga
+                for idx, row in df_attuale.iterrows():
+                    if idx != riga_nuova and row["MEZZO"] == nuovo_mezzo:
+                        # Libera la riga che aveva il furgone in precedenza
+                        df_attuale.iat[idx, df_attuale.columns.get_loc("MEZZO")] = "Nessuno"
+                        nome_prev = f"{df_attuale.iat[idx, df_attuale.columns.get_loc('COGNOME')]} {df_attuale.iat[idx, df_attuale.columns.get_loc('NOME')]}"
+                        st.info(f"ℹ️ Il furgone **{nuovo_mezzo}** è stato spostato da **{nome_prev}** al nuovo autista.")
+                        break
+
+            # Pulisci eventuali voci-separatore selezionate per errore
+            col_mezzo = df_attuale.columns.get_loc("MEZZO")
+            separatori = {"── NON ASSEGNATI ──", "── GIÀ ASSEGNATI ──"}
+            for idx in range(len(df_attuale)):
+                if df_attuale.iat[idx, col_mezzo] in separatori:
+                    df_attuale.iat[idx, col_mezzo] = "Nessuno"
 
             st.session_state.stato_giornaliero = df_attuale
 
