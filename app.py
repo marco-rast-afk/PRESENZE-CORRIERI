@@ -244,7 +244,6 @@ def carica_database_json():
             elif df_giorno.empty and not df_anagrafica.empty:
                 df_giorno = df_anagrafica.copy()
                 df_giorno["STATO"]         = "Presente (Giro Fisso)"
-                df_giorno["GIRO_SUPPORTO"] = ""
                 df_giorno["MEZZO"]         = "Nessuno"
                 df_giorno["KM_INIZIO"]     = 0
                 df_giorno["NOTE"]          = ""
@@ -435,7 +434,6 @@ if 'database_caricato' not in st.session_state:
 
         df_giorno = st.session_state.anagrafica_corrieri.copy()
         df_giorno["STATO"] = "Presente (Giro Fisso)"
-        df_giorno["GIRO_SUPPORTO"] = ""
         df_giorno["MEZZO"] = "Nessuno"
         df_giorno["KM_INIZIO"] = 0
         df_giorno["NOTE"] = ""
@@ -465,7 +463,6 @@ if "storico_presenze" not in st.session_state:
 # (colonne mancanti si verificano quando il DB è stato creato con una versione precedente)
 _colonne_default = {
     "STATO":         "Presente (Giro Fisso)",
-    "GIRO_SUPPORTO": "",
     "MEZZO":         "Nessuno",
     "KM_INIZIO":     0,
     "NOTE":          "",
@@ -496,7 +493,6 @@ if st.sidebar.button("➕ NUOVA GIORNATA", use_container_width=True):
         # Nessuno storico: reset pulito dall'anagrafica
         df_nuovo = df_anag.copy()
         df_nuovo["STATO"]         = "Presente (Giro Fisso)"
-        df_nuovo["GIRO_SUPPORTO"] = ""
         df_nuovo["MEZZO"]         = "Nessuno"
         df_nuovo["KM_INIZIO"]     = 0
         df_nuovo["NOTE"]          = ""
@@ -518,7 +514,6 @@ if st.sidebar.button("➕ NUOVA GIORNATA", use_container_width=True):
             # Costruisci il nuovo tabellone partendo dall'anagrafica
             df_nuovo = df_anag.copy()
             df_nuovo["STATO"]         = "Presente (Giro Fisso)"
-            df_nuovo["GIRO_SUPPORTO"] = ""
             df_nuovo["MEZZO"]         = "Nessuno"
             df_nuovo["KM_INIZIO"]     = 0
             df_nuovo["NOTE"]          = ""
@@ -539,7 +534,6 @@ if st.sidebar.button("➕ NUOVA GIORNATA", use_container_width=True):
                     r = match_st.iloc[0]
                     df_nuovo.at[idx, "STATO"] = r.get("STATO", "Presente (Giro Fisso)")
                     df_nuovo.at[idx, "MEZZO"] = r.get("MEZZO", "Nessuno")
-                    df_nuovo.at[idx, "GIRO_SUPPORTO"] = r.get("GIRO_SUPPORTO", "")
 
                 # 2. KM_INIZIO nuova giornata = KM_INIZIO del tabellone corrente
                 #    (cioè i km che erano stati inseriti stamattina, che diventano
@@ -738,7 +732,7 @@ if scelta == "📋 Tabellone Presenze":
     df_correnti = st.session_state.stato_giornaliero
     # Garantisce colonne KM anche se df viene da una versione precedente del DB
     for _c, _d in [("KM_INIZIO", 0), ("MEZZO", "Nessuno"),
-                   ("GIRO_SUPPORTO", ""), ("NOTE", ""), ("STATO", "Presente (Giro Fisso)"),
+                   ("NOTE", ""), ("STATO", "Presente (Giro Fisso)"),
                    ("CELLULARE", ""), ("GIRO_FISSO", ""), ("COGNOME", ""), ("NOME", "")]:
         if _c not in df_correnti.columns:
             df_correnti[_c] = _d
@@ -914,7 +908,7 @@ elif scelta == "👥 Anagrafica Personale":
 
             # FIX #2 – NON rigenerare il tabellone giornaliero da zero:
             # aggiorna SOLO le colonne anagrafiche (COGNOME, NOME, CELLULARE, GIRO_FISSO)
-            # preservando STATO, GIRO_SUPPORTO, MEZZO e NOTE già inseriti.
+            # preservando STATO, MEZZO e NOTE già inseriti.
             df_giorno = st.session_state.stato_giornaliero.copy()
 
             # Allinea le righe esistenti
@@ -930,7 +924,6 @@ elif scelta == "👥 Anagrafica Personale":
             if len(df_attuale) > len(df_giorno):
                 nuovi = df_attuale.iloc[len(df_giorno):].copy()
                 nuovi["STATO"]         = "Presente (Giro Fisso)"
-                nuovi["GIRO_SUPPORTO"] = ""
                 nuovi["MEZZO"]         = "Nessuno"
                 nuovi["KM_INIZIO"]     = 0
                 nuovi["KM_FINE"]       = 0
