@@ -98,24 +98,10 @@ div[data-testid="stDateInput"] {
     margin-bottom: 4px !important;
 }
 
-/* Minimizza header Streamlit mantenendo visibile il toggle sidebar */
+/* Riduci altezza header senza nasconderlo (nasconderlo blocca il toggle sidebar) */
 header[data-testid="stHeader"] {
     height: 2.5rem !important;
-    min-height: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-}
-
-/* Nascondi il logo/branding interno all header ma non il toggle */
-header[data-testid="stHeader"] > * {
-    visibility: hidden !important;
-}
-
-/* Mantieni sempre visibile il pulsante toggle sidebar */
-button[data-testid="collapsedControl"] {
-    visibility: visible !important;
-    display: flex !important;
-    z-index: 999 !important;
+    min-height: 2.5rem !important;
 }
 
 /* Riduci margini tra elementi */
