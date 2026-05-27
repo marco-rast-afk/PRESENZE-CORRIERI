@@ -615,6 +615,12 @@ if scelta == "📋 Tabellone Presenze":
                 st.warning("Nessun dato da archiviare.")
 
     df_correnti = st.session_state.stato_giornaliero
+    # Garantisce colonne KM anche se df viene da una versione precedente del DB
+    for _c, _d in [("KM_INIZIO", 0), ("KM_FINE", 0), ("MEZZO", "Nessuno"),
+                   ("GIRO_SUPPORTO", ""), ("NOTE", ""), ("STATO", "Presente (Giro Fisso)")]:
+        if _c not in df_correnti.columns:
+            df_correnti[_c] = _d
+
     blocco1 = df_correnti[df_correnti['STATO'] == "Presente (Giro Fisso)"][
         ['COGNOME', 'NOME', 'CELLULARE', 'GIRO_FISSO', 'MEZZO', 'KM_INIZIO', 'KM_FINE', 'NOTE']]
     blocco2 = df_correnti[df_correnti['STATO'] == "Supporto Altra Filiale"][
