@@ -672,11 +672,10 @@ if scelta == "📋 Tabellone Presenze":
             "GIRO_FISSO":    st.column_config.TextColumn("Giro Fisso", disabled=True),
             "STATO": st.column_config.SelectboxColumn(
                 "Stato Presenza",
-                options=["Presente (Giro Fisso)", "Supporto Altra Filiale", "Assente"],
+                options=["Presente (Giro Fisso)", "Supporto Altra Filiale", "Affiancamento", "Assente"],
                 required=True,
                 width="medium"
             ),
-            "GIRO_SUPPORTO": st.column_config.TextColumn("Giro di Supporto / Filiale", width="medium"),
             "MEZZO": st.column_config.SelectboxColumn(
                 "Furgone Assegnato (Targa)",
                 options=elenco_furgoni_tendina,
@@ -746,8 +745,8 @@ if scelta == "📋 Tabellone Presenze":
 
     blocco1 = df_correnti[df_correnti['STATO'] == "Presente (Giro Fisso)"][
         ['COGNOME', 'NOME', 'CELLULARE', 'GIRO_FISSO', 'MEZZO', 'KM_INIZIO', 'NOTE']]
-    blocco2 = df_correnti[df_correnti['STATO'] == "Supporto Altra Filiale"][
-        ['COGNOME', 'NOME', 'CELLULARE', 'GIRO_SUPPORTO', 'MEZZO', 'KM_INIZIO', 'NOTE']]
+    blocco2 = df_correnti[df_correnti['STATO'].isin(["Supporto Altra Filiale", "Affiancamento"])][
+        ['COGNOME', 'NOME', 'CELLULARE', 'STATO', 'MEZZO', 'KM_INIZIO', 'NOTE']]
     blocco3 = st.session_state.responsabili
     blocco4 = df_correnti[df_correnti['STATO'] == "Assente"][
         ['COGNOME', 'NOME', 'CELLULARE', 'NOTE']]
@@ -801,7 +800,7 @@ if scelta == "📋 Tabellone Presenze":
             # FIX #7 – rimosso ws.delete_rows inutile; il foglio è appena creato
             prossima_riga = 3
             prossima_riga = scrivi_blocco_excel(ws, blocco1, "1° BLOCCO: CORRIERI CON NUMERO DI GIRO ASSOCIATO",     prossima_riga)
-            prossima_riga = scrivi_blocco_excel(ws, blocco2, "2° BLOCCO: CORRIERI IN SUPPORTO ALTRA FILIALE",        prossima_riga)
+            prossima_riga = scrivi_blocco_excel(ws, blocco2, "2° BLOCCO: CORRIERI IN SUPPORTO ALTRA FILIALE / AFFIANCAMENTO", prossima_riga)
             prossima_riga = scrivi_blocco_excel(ws, blocco3, "3° BLOCCO: NOMINATIVI RESPONSABILI PRESENTI",          prossima_riga)
             prossima_riga = scrivi_blocco_excel(ws, blocco4, "4° BLOCCO: CORRIERI ASSENTI",                          prossima_riga)
 
@@ -846,7 +845,7 @@ if scelta == "📋 Tabellone Presenze":
             pdf.ln(4)
 
         aggiungi_tabella_pdf("1. CORRIERI CON GIRO ASSOCIATO",         blocco1)
-        aggiungi_tabella_pdf("2. EVENTUALI CORRIERI IN SUPPORTO",       blocco2)
+        aggiungi_tabella_pdf("2. CORRIERI IN SUPPORTO / AFFIANCAMENTO", blocco2)
         aggiungi_tabella_pdf("3. NOMINATIVI RESPONSABILI PRESENTI",     blocco3)
         aggiungi_tabella_pdf("4. CORRIERI ASSENTI",                     blocco4)
         return bytes(pdf.output())
@@ -1015,7 +1014,7 @@ elif scelta == "📊 Storico & Furgoni":
                 cell.fill = _fb
                 cell.alignment = _Align(horizontal="center")
                 _ws.column_dimensions[_gcl(c)].width = larg
-            _dv = _DV(type="list", formula1='"Presente (Giro Fisso),Supporto Altra Filiale,Assente"', showDropDown=False)
+            _dv = _DV(type="list", formula1='"Presente (Giro Fisso),Supporto Altra Filiale,Affiancamento,Assente"', showDropDown=False)
             _ws.add_data_validation(_dv)
             for r, (cogn, nome, cell_, giro) in enumerate(_corrieri, 2):
                 _ws.row_dimensions[r].height = 17
@@ -1122,7 +1121,7 @@ elif scelta == "📊 Storico & Furgoni":
             with col_f1:
                 filtro_data = st.selectbox("Filtra per data", ["Tutte"] + date_disponibili)
             with col_f2:
-                filtro_stato = st.selectbox("Filtra per stato", ["Tutti", "Presente (Giro Fisso)", "Supporto Altra Filiale", "Assente"])
+                filtro_stato = st.selectbox("Filtra per stato", ["Tutti", "Presente (Giro Fisso)", "Supporto Altra Filiale", "Affiancamento", "Assente"])
 
             df_vis = storico.copy()
             if filtro_data != "Tutte":
