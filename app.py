@@ -413,10 +413,19 @@ if "storico_presenze" not in st.session_state:
         "MEZZO", "KM_INIZIO", "KM_FINE", "KM_PERCORSI", "NOTE"
     ])
 
-# Assicura che stato_giornaliero abbia le colonne KM
-for _col in ["KM_INIZIO", "KM_FINE"]:
+# Assicura che stato_giornaliero abbia TUTTE le colonne attese
+# (colonne mancanti si verificano quando il DB è stato creato con una versione precedente)
+_colonne_default = {
+    "STATO":         "Presente (Giro Fisso)",
+    "GIRO_SUPPORTO": "",
+    "MEZZO":         "Nessuno",
+    "KM_INIZIO":     0,
+    "KM_FINE":       0,
+    "NOTE":          "",
+}
+for _col, _default in _colonne_default.items():
     if _col not in st.session_state.stato_giornaliero.columns:
-        st.session_state.stato_giornaliero[_col] = 0
+        st.session_state.stato_giornaliero[_col] = _default
 
 menu = ["📋 Tabellone Presenze", "🚐 Anagrafica Furgoni", "👥 Anagrafica Personale", "📊 Storico & Furgoni"]
 scelta = st.sidebar.selectbox("Navigazione", menu)
