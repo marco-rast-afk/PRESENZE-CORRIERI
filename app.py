@@ -179,6 +179,7 @@ def salva_database_json():
         _sb_upsert("anagrafica_corrieri", st.session_state.anagrafica_corrieri.to_dict(orient="records"))
         _sb_upsert("responsabili",        st.session_state.responsabili.to_dict(orient="records"))
         _sb_upsert("stato_giornaliero",   st.session_state.stato_giornaliero.to_dict(orient="records"))
+        _sb_upsert("storico_presenze",    st.session_state.storico_presenze.to_dict(orient="records"))
         st.sidebar.success("Salvato su Supabase!")
         return True
     except Exception as e:
@@ -192,11 +193,13 @@ def carica_database_json():
         corrieri  = _sb_leggi("anagrafica_corrieri")
         resp      = _sb_leggi("responsabili")
         giorno    = _sb_leggi("stato_giornaliero")
+        storico   = _sb_leggi("storico_presenze")
         if furgoni or corrieri:
             st.session_state.furgoni              = pd.DataFrame(furgoni)
             st.session_state.anagrafica_corrieri  = pd.DataFrame(corrieri)  if corrieri else pd.DataFrame()
             st.session_state.responsabili         = pd.DataFrame(resp)      if resp     else pd.DataFrame()
             st.session_state.stato_giornaliero    = pd.DataFrame(giorno)    if giorno   else pd.DataFrame()
+            st.session_state.storico_presenze     = pd.DataFrame(storico)   if storico  else pd.DataFrame()
             return True
         return False
     except Exception as e:
@@ -385,8 +388,14 @@ if 'database_caricato' not in st.session_state:
         df_giorno["STATO"] = "Presente (Giro Fisso)"
         df_giorno["GIRO_SUPPORTO"] = ""
         df_giorno["MEZZO"] = "Nessuno"
+        df_giorno["KM_INIZIO"] = 0
+        df_giorno["KM_FINE"] = 0
         df_giorno["NOTE"] = ""
         st.session_state.stato_giornaliero = df_giorno
+        st.session_state.storico_presenze = pd.DataFrame(columns=[
+            "DATA", "COGNOME", "NOME", "GIRO_FISSO", "STATO",
+            "MEZZO", "KM_INIZIO", "KM_FINE", "KM_PERCORSI", "NOTE"
+        ])
         st.session_state.database_caricato = True
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -397,7 +406,19 @@ for _k in ["excel_sidebar_data", "excel_sidebar_nome", "pdf_sidebar_data", "pdf_
     if _k not in st.session_state:
         st.session_state[_k] = None
 
-menu = ["📋 Tabellone Presenze", "🚐 Anagrafica Furgoni", "👥 Anagrafica Personale"]
+# Inizializza storico_presenze se non ancora presente (es. DB precedente senza questa tabella)
+if "storico_presenze" not in st.session_state:
+    st.session_state.storico_presenze = pd.DataFrame(columns=[
+        "DATA", "COGNOME", "NOME", "GIRO_FISSO", "STATO",
+        "MEZZO", "KM_INIZIO", "KM_FINE", "KM_PERCORSI", "NOTE"
+    ])
+
+# Assicura che stato_giornaliero abbia le colonne KM
+for _col in ["KM_INIZIO", "KM_FINE"]:
+    if _col not in st.session_state.stato_giornaliero.columns:
+        st.session_state.stato_giornaliero[_col] = 0
+
+menu = ["📋 Tabellone Presenze", "🚐 Anagrafica Furgoni", "👥 Anagrafica Personale", "📊 Storico & Furgoni"]
 scelta = st.sidebar.selectbox("Navigazione", menu)
 
 st.sidebar.markdown("---")
@@ -521,6 +542,8 @@ if scelta == "📋 Tabellone Presenze":
                 required=True,
                 width="medium"
             ),
+            "KM_INIZIO": st.column_config.NumberColumn("Km Inizio Giornata", min_value=0, step=1, width="small"),
+            "KM_FINE":   st.column_config.NumberColumn("Km Fine Giornata",   min_value=0, step=1, width="small"),
             "NOTE": st.column_config.TextColumn("Note Operative", width="large")
         },
         hide_index=True,
@@ -530,11 +553,63 @@ if scelta == "📋 Tabellone Presenze":
         on_change=salva_tabellone_giornaliero
     )
 
+    # ── ARCHIVIA GIORNATA ─────────────────────────────────────────────────────
+    st.markdown("---")
+    col_arch1, col_arch2 = st.columns([2, 1])
+    with col_arch1:
+        st.markdown("#### 📁 Archivia giornata nello storico")
+        st.caption("Salva una copia della giornata corrente nello storico e pre-compila i Km Inizio del giorno successivo.")
+    with col_arch2:
+        if st.button("📁 ARCHIVIA GIORNATA", type="primary", use_container_width=True):
+            df_oggi = st.session_state.stato_giornaliero.copy()
+            data_str = data_formato_personalizzato
+
+            # Costruisci righe dello storico (solo corrieri con mezzo assegnato)
+            nuove_righe = []
+            for _, row in df_oggi.iterrows():
+                km_i = int(row.get("KM_INIZIO", 0) or 0)
+                km_f = int(row.get("KM_FINE", 0) or 0)
+                nuove_righe.append({
+                    "DATA":        data_str,
+                    "COGNOME":     row["COGNOME"],
+                    "NOME":        row["NOME"],
+                    "GIRO_FISSO":  row["GIRO_FISSO"],
+                    "STATO":       row["STATO"],
+                    "MEZZO":       row.get("MEZZO", "Nessuno"),
+                    "KM_INIZIO":   km_i,
+                    "KM_FINE":     km_f,
+                    "KM_PERCORSI": max(km_f - km_i, 0),
+                    "NOTE":        row.get("NOTE", ""),
+                })
+
+            if nuove_righe:
+                df_nuove = pd.DataFrame(nuove_righe)
+                # Rimuovi eventuale archiviazione precedente della stessa data
+                st_storico = st.session_state.storico_presenze
+                if not st_storico.empty and "DATA" in st_storico.columns:
+                    st_storico = st_storico[st_storico["DATA"] != data_str]
+                st.session_state.storico_presenze = pd.concat(
+                    [st_storico, df_nuove], ignore_index=True
+                )
+
+                # Pre-compila KM_INIZIO del giorno successivo con KM_FINE di oggi
+                df_next = st.session_state.stato_giornaliero.copy()
+                for idx, row in df_oggi.iterrows():
+                    km_fine_oggi = int(row.get("KM_FINE", 0) or 0)
+                    df_next.iat[idx, df_next.columns.get_loc("KM_INIZIO")] = km_fine_oggi
+                    df_next.iat[idx, df_next.columns.get_loc("KM_FINE")]   = 0
+                st.session_state.stato_giornaliero = df_next
+
+                salva_database_json()
+                st.success(f"✅ Giornata del {data_str} archiviata! Km Inizio pre-compilati per il giorno successivo.")
+            else:
+                st.warning("Nessun dato da archiviare.")
+
     df_correnti = st.session_state.stato_giornaliero
     blocco1 = df_correnti[df_correnti['STATO'] == "Presente (Giro Fisso)"][
-        ['COGNOME', 'NOME', 'CELLULARE', 'GIRO_FISSO', 'MEZZO', 'NOTE']]
+        ['COGNOME', 'NOME', 'CELLULARE', 'GIRO_FISSO', 'MEZZO', 'KM_INIZIO', 'KM_FINE', 'NOTE']]
     blocco2 = df_correnti[df_correnti['STATO'] == "Supporto Altra Filiale"][
-        ['COGNOME', 'NOME', 'CELLULARE', 'GIRO_SUPPORTO', 'MEZZO', 'NOTE']]
+        ['COGNOME', 'NOME', 'CELLULARE', 'GIRO_SUPPORTO', 'MEZZO', 'KM_INIZIO', 'KM_FINE', 'NOTE']]
     blocco3 = st.session_state.responsabili
     blocco4 = df_correnti[df_correnti['STATO'] == "Assente"][
         ['COGNOME', 'NOME', 'CELLULARE', 'NOTE']]
@@ -720,6 +795,8 @@ elif scelta == "👥 Anagrafica Personale":
                 nuovi["STATO"]         = "Presente (Giro Fisso)"
                 nuovi["GIRO_SUPPORTO"] = ""
                 nuovi["MEZZO"]         = "Nessuno"
+                nuovi["KM_INIZIO"]     = 0
+                nuovi["KM_FINE"]       = 0
                 nuovi["NOTE"]          = ""
                 df_giorno = pd.concat([df_giorno, nuovi], ignore_index=True)
 
@@ -761,3 +838,181 @@ elif scelta == "👥 Anagrafica Personale":
         key="tabella_responsabili",
         on_change=aggiorna_responsabili
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. STORICO PRESENZE & ANALISI FURGONI
+# ─────────────────────────────────────────────────────────────────────────────
+elif scelta == "📊 Storico & Furgoni":
+    st.title("📊 Storico Presenze & Analisi Utilizzo Furgoni")
+
+    storico = st.session_state.storico_presenze.copy()
+
+    if storico.empty:
+        st.info("📭 Nessuna giornata ancora archiviata. Vai al Tabellone Presenze e clicca **Archivia Giornata** al termine di ogni giorno.")
+    else:
+        # Assicura tipi numerici
+        for _c in ["KM_INIZIO", "KM_FINE", "KM_PERCORSI"]:
+            if _c in storico.columns:
+                storico[_c] = pd.to_numeric(storico[_c], errors="coerce").fillna(0).astype(int)
+
+        tab_storico, tab_furgoni = st.tabs(["📋 Storico Giornaliero", "🚐 Analisi per Furgone"])
+
+        # ── TAB 1: STORICO GIORNALIERO ────────────────────────────────────────
+        with tab_storico:
+            st.subheader("Registro completo giornate archiviate")
+
+            date_disponibili = sorted(storico["DATA"].unique(), reverse=True)
+            col_f1, col_f2 = st.columns([2, 2])
+            with col_f1:
+                filtro_data = st.selectbox("Filtra per data", ["Tutte"] + date_disponibili)
+            with col_f2:
+                filtro_stato = st.selectbox("Filtra per stato", ["Tutti", "Presente (Giro Fisso)", "Supporto Altra Filiale", "Assente"])
+
+            df_vis = storico.copy()
+            if filtro_data != "Tutte":
+                df_vis = df_vis[df_vis["DATA"] == filtro_data]
+            if filtro_stato != "Tutti":
+                df_vis = df_vis[df_vis["STATO"] == filtro_stato]
+
+            st.dataframe(
+                df_vis.reset_index(drop=True),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "DATA":        st.column_config.TextColumn("Data"),
+                    "COGNOME":     st.column_config.TextColumn("Cognome"),
+                    "NOME":        st.column_config.TextColumn("Nome"),
+                    "GIRO_FISSO":  st.column_config.TextColumn("Giro"),
+                    "STATO":       st.column_config.TextColumn("Stato"),
+                    "MEZZO":       st.column_config.TextColumn("Furgone"),
+                    "KM_INIZIO":   st.column_config.NumberColumn("Km Inizio"),
+                    "KM_FINE":     st.column_config.NumberColumn("Km Fine"),
+                    "KM_PERCORSI": st.column_config.NumberColumn("Km Percorsi"),
+                    "NOTE":        st.column_config.TextColumn("Note"),
+                }
+            )
+
+            # Esporta storico Excel
+            def esporta_storico_excel():
+                out = io.BytesIO()
+                with pd.ExcelWriter(out, engine="openpyxl") as writer:
+                    df_vis.to_excel(writer, sheet_name="Storico", index=False)
+                    ws = writer.sheets["Storico"]
+                    hdr_font = Font(name="Calibri", bold=True, color="FFFFFF")
+                    hdr_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+                    for cell in ws[1]:
+                        cell.font = hdr_font
+                        cell.fill = hdr_fill
+                    for col in ws.columns:
+                        ml = max((len(str(c.value or "")) for c in col), default=0)
+                        ws.column_dimensions[get_column_letter(col[0].column)].width = max(ml + 4, 12)
+                return out.getvalue()
+
+            st.download_button(
+                "📥 Scarica Storico Excel",
+                data=esporta_storico_excel(),
+                file_name=f"Storico_Presenze.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+        # ── TAB 2: ANALISI PER FURGONE ────────────────────────────────────────
+        with tab_furgoni:
+            st.subheader("Utilizzo e km medi per furgone")
+
+            # Solo righe con mezzo assegnato e km percorsi > 0
+            df_fur = storico[
+                (storico["MEZZO"] != "Nessuno") &
+                (storico["MEZZO"].notna()) &
+                (storico["MEZZO"] != "")
+            ].copy()
+
+            if df_fur.empty:
+                st.info("Nessun dato di utilizzo furgoni trovato nello storico.")
+            else:
+                # Selettore furgone
+                targhe_usate = sorted(df_fur["MEZZO"].unique())
+                furgone_sel = st.selectbox("Seleziona un furgone per il dettaglio", ["Tutti"] + targhe_usate)
+
+                # ── Riepilogo tutti i furgoni ──
+                st.markdown("##### 📊 Riepilogo generale")
+                riepilogo = (
+                    df_fur.groupby("MEZZO")
+                    .agg(
+                        Giorni_Utilizzo=("DATA", "nunique"),
+                        Km_Totali=("KM_PERCORSI", "sum"),
+                        Km_Medi_Giorno=("KM_PERCORSI", "mean"),
+                        Autisti_Diversi=("COGNOME", "nunique"),
+                    )
+                    .reset_index()
+                    .rename(columns={"MEZZO": "Furgone"})
+                )
+                riepilogo["Km_Medi_Giorno"] = riepilogo["Km_Medi_Giorno"].round(1)
+                riepilogo = riepilogo.sort_values("Km_Totali", ascending=False)
+
+                st.dataframe(
+                    riepilogo,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Furgone":          st.column_config.TextColumn("Furgone (Targa)"),
+                        "Giorni_Utilizzo":  st.column_config.NumberColumn("Giorni Utilizzo"),
+                        "Km_Totali":        st.column_config.NumberColumn("Km Totali"),
+                        "Km_Medi_Giorno":   st.column_config.NumberColumn("Km Medi/Giorno"),
+                        "Autisti_Diversi":  st.column_config.NumberColumn("N° Autisti Diversi"),
+                    }
+                )
+
+                # ── Dettaglio furgone selezionato ──
+                if furgone_sel != "Tutti":
+                    st.markdown(f"##### 🔍 Dettaglio furgone: **{furgone_sel}**")
+                    df_det = df_fur[df_fur["MEZZO"] == furgone_sel].sort_values("DATA", ascending=False)
+
+                    giorni_uso   = df_det["DATA"].nunique()
+                    km_tot       = int(df_det["KM_PERCORSI"].sum())
+                    km_medi      = round(df_det["KM_PERCORSI"].mean(), 1) if giorni_uso > 0 else 0
+
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("Giorni di utilizzo", giorni_uso)
+                    m2.metric("Km totali percorsi", f"{km_tot:,}")
+                    m3.metric("Km medi al giorno",  f"{km_medi}")
+
+                    st.markdown("**Storico utilizzo giorno per giorno:**")
+                    st.dataframe(
+                        df_det[["DATA","COGNOME","NOME","STATO","KM_INIZIO","KM_FINE","KM_PERCORSI","NOTE"]].reset_index(drop=True),
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "DATA":        st.column_config.TextColumn("Data"),
+                            "COGNOME":     st.column_config.TextColumn("Cognome"),
+                            "NOME":        st.column_config.TextColumn("Nome"),
+                            "STATO":       st.column_config.TextColumn("Stato"),
+                            "KM_INIZIO":   st.column_config.NumberColumn("Km Inizio"),
+                            "KM_FINE":     st.column_config.NumberColumn("Km Fine"),
+                            "KM_PERCORSI": st.column_config.NumberColumn("Km Percorsi"),
+                            "NOTE":        st.column_config.TextColumn("Note"),
+                        }
+                    )
+
+                    # Esporta dettaglio furgone
+                    def esporta_furgone_excel():
+                        out = io.BytesIO()
+                        with pd.ExcelWriter(out, engine="openpyxl") as writer:
+                            df_det.to_excel(writer, sheet_name=furgone_sel[:31], index=False)
+                            ws = writer.sheets[furgone_sel[:31]]
+                            hdr_font = Font(name="Calibri", bold=True, color="FFFFFF")
+                            hdr_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+                            for cell in ws[1]:
+                                cell.font = hdr_font
+                                cell.fill = hdr_fill
+                            for col in ws.columns:
+                                ml = max((len(str(c.value or "")) for c in col), default=0)
+                                ws.column_dimensions[get_column_letter(col[0].column)].width = max(ml + 4, 12)
+                        return out.getvalue()
+
+                    st.download_button(
+                        f"📥 Scarica dettaglio {furgone_sel}",
+                        data=esporta_furgone_excel(),
+                        file_name=f"Furgone_{furgone_sel}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
