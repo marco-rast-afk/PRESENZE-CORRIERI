@@ -620,16 +620,94 @@ if scelta == "📋 Tabellone Presenze":
                     [st_storico, df_nuove], ignore_index=True
                 )
 
-                # Pre-compila KM_INIZIO del giorno successivo con KM_FINE di oggi
-                df_next = st.session_state.stato_giornaliero.copy()
-                for idx, row in df_oggi.iterrows():
-                    km_fine_oggi = int(row.get("KM_FINE", 0) or 0)
-                    df_next.iat[idx, df_next.columns.get_loc("KM_INIZIO")] = km_fine_oggi
-                    df_next.iat[idx, df_next.columns.get_loc("KM_FINE")]   = 0
-                st.session_state.stato_giornaliero = df_next
+                # ── LOGICA SMART POST-ARCHIVIAZIONE ──────────────────────────
+                # Dopo l'archiviazione, il tabellone deve mostrare i dati della
+                # data più vicina a OGGI disponibile nello storico:
+                #   • Se esistono già dati odierni nello storico → li carica (km invariati)
+                #   • Altrimenti → carica i dati del giorno più recente <= oggi
+                #     e usa quei KM_FINE come KM_INIZIO del tabellone corrente
+                oggi_dt = datetime.today().date()
+                storico_aggiornato = st.session_state.storico_presenze.copy()
 
-                salva_database_json()
-                st.success(f"✅ Giornata del {data_str} archiviata! Km Inizio pre-compilati per il giorno successivo.")
+                # Prova a parsare le date italiane nel formato "G MESE AAAA"
+                def parse_data_ita(s):
+                    try:
+                        mesi_inv = {v: k for k, v in MESI_ITA.items()}
+                        parti = str(s).strip().split()
+                        if len(parti) == 3:
+                            g, m, a = int(parti[0]), mesi_inv.get(parti[1].upper(), 0), int(parti[2])
+                            if m:
+                                return datetime(a, m, g).date()
+                    except Exception:
+                        pass
+                    return None
+
+                storico_aggiornato["_data_dt"] = storico_aggiornato["DATA"].apply(parse_data_ita)
+
+                # Cerca dati per oggi
+                righe_oggi = storico_aggiornato[storico_aggiornato["_data_dt"] == oggi_dt]
+
+                if not righe_oggi.empty:
+                    # Esistono già dati per oggi: carica quei dati nel tabellone (km invariati)
+                    df_next = st.session_state.stato_giornaliero.copy()
+                    for idx in df_next.index:
+                        cognome = df_next.at[idx, "COGNOME"]
+                        nome    = df_next.at[idx, "NOME"]
+                        match   = righe_oggi[
+                            (righe_oggi["COGNOME"] == cognome) &
+                            (righe_oggi["NOME"] == nome)
+                        ]
+                        if not match.empty:
+                            r = match.iloc[0]
+                            df_next.at[idx, "KM_INIZIO"] = int(r.get("KM_INIZIO", 0) or 0)
+                            df_next.at[idx, "KM_FINE"]   = int(r.get("KM_FINE", 0) or 0)
+                            df_next.at[idx, "MEZZO"]     = r.get("MEZZO", "Nessuno")
+                            df_next.at[idx, "STATO"]     = r.get("STATO", "Presente (Giro Fisso)")
+                            df_next.at[idx, "NOTE"]      = r.get("NOTE", "")
+                    st.session_state.stato_giornaliero = df_next
+                    salva_database_json()
+                    st.success(f"✅ Giornata del {data_str} archiviata! Caricati i dati già presenti per oggi.")
+                else:
+                    # Nessun dato per oggi: cerca la data più vicina a oggi (<=oggi) nello storico
+                    storico_passato = storico_aggiornato[
+                        storico_aggiornato["_data_dt"].notna() &
+                        (storico_aggiornato["_data_dt"] <= oggi_dt)
+                    ]
+                    if not storico_passato.empty:
+                        data_ref = storico_passato["_data_dt"].max()  # la più vicina a oggi
+                        righe_ref = storico_passato[storico_passato["_data_dt"] == data_ref]
+                        label_ref = righe_ref.iloc[0]["DATA"]
+
+                        # Pre-compila KM_INIZIO con KM_FINE del giorno di riferimento
+                        df_next = st.session_state.stato_giornaliero.copy()
+                        for idx in df_next.index:
+                            cognome = df_next.at[idx, "COGNOME"]
+                            nome    = df_next.at[idx, "NOME"]
+                            match   = righe_ref[
+                                (righe_ref["COGNOME"] == cognome) &
+                                (righe_ref["NOME"] == nome)
+                            ]
+                            if not match.empty:
+                                km_fine_ref = int(match.iloc[0].get("KM_FINE", 0) or 0)
+                                df_next.at[idx, "KM_INIZIO"] = km_fine_ref
+                            df_next.at[idx, "KM_FINE"] = 0
+                        st.session_state.stato_giornaliero = df_next
+                        salva_database_json()
+                        st.success(
+                            f"✅ Giornata del {data_str} archiviata! "
+                            f"Km Inizio pre-compilati dai Km Fine del **{label_ref}** "
+                            f"(giornata più recente disponibile ≤ oggi)."
+                        )
+                    else:
+                        # Nessuna data di riferimento valida: pre-compila solo con KM_FINE di oggi
+                        df_next = st.session_state.stato_giornaliero.copy()
+                        for idx, row in df_oggi.iterrows():
+                            km_fine_oggi = int(row.get("KM_FINE", 0) or 0)
+                            df_next.iat[idx, df_next.columns.get_loc("KM_INIZIO")] = km_fine_oggi
+                            df_next.iat[idx, df_next.columns.get_loc("KM_FINE")]   = 0
+                        st.session_state.stato_giornaliero = df_next
+                        salva_database_json()
+                        st.success(f"✅ Giornata del {data_str} archiviata! Km Inizio pre-compilati per il giorno successivo.")
             else:
                 st.warning("Nessun dato da archiviare.")
 
