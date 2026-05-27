@@ -1081,9 +1081,32 @@ elif scelta == "📊 Storico & Furgoni":
 
                 # ── Expander per ogni furgone ──────────────────────────────────
                 st.markdown("##### 🔍 Dettaglio giornaliero per furgone")
-                st.caption("Espandi un furgone per vedere giorno per giorno quale autista lo ha utilizzato.")
 
-                for _, row_riepilogo in riepilogo.iterrows():
+                col_ord1, col_ord2 = st.columns([2, 1])
+                with col_ord1:
+                    ordinamento_sel = st.selectbox(
+                        "Ordina furgoni per",
+                        options=["Targa (A→Z)", "Giorni Utilizzo (↓)", "Km Totali (↓)"],
+                        key="ordinamento_expander"
+                    )
+                with col_ord2:
+                    direzione_asc = st.checkbox("Inverti ordine", value=False, key="direzione_expander")
+
+                _map_ord = {
+                    "Targa (A→Z)":          ("Furgone",         True),
+                    "Giorni Utilizzo (↓)":  ("Giorni_Utilizzo", False),
+                    "Km Totali (↓)":        ("Km_Totali",       False),
+                }
+                _col_ord, _asc_default = _map_ord[ordinamento_sel]
+                _asc_finale = (not _asc_default) if direzione_asc else _asc_default
+                riepilogo_ordinato = riepilogo.sort_values(_col_ord, ascending=_asc_finale)
+
+                st.caption(
+                    f"{'↑' if _asc_finale else '↓'} Ordinato per **{ordinamento_sel.split(' (')[0]}** "
+                    f"— {len(riepilogo_ordinato)} furgoni con utilizzo registrato"
+                )
+
+                for _, row_riepilogo in riepilogo_ordinato.iterrows():
                     targa       = row_riepilogo["Furgone"]
                     giorni_uso  = int(row_riepilogo["Giorni_Utilizzo"])
                     km_tot      = int(row_riepilogo["Km_Totali"])
