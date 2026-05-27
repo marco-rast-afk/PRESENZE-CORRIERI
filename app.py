@@ -98,11 +98,18 @@ div[data-testid="stDateInput"] {
     margin-bottom: 4px !important;
 }
 
-/* Nascondi header Streamlit per piu spazio */
+/* Nascondi header Streamlit per piu spazio MA mantieni visibile il toggle sidebar */
 header[data-testid="stHeader"] {
     height: 0 !important;
     min-height: 0 !important;
     visibility: hidden !important;
+}
+
+/* Ripristina visibilità del bottone per aprire/chiudere la sidebar */
+button[data-testid="collapsedControl"],
+[data-testid="collapsedControl"] {
+    visibility: visible !important;
+    display: flex !important;
 }
 
 /* Riduci margini tra elementi */
@@ -195,11 +202,31 @@ def carica_database_json():
         giorno    = _sb_leggi("stato_giornaliero")
         storico   = _sb_leggi("storico_presenze")
         if furgoni or corrieri:
-            st.session_state.furgoni              = pd.DataFrame(furgoni)
-            st.session_state.anagrafica_corrieri  = pd.DataFrame(corrieri)  if corrieri else pd.DataFrame()
-            st.session_state.responsabili         = pd.DataFrame(resp)      if resp     else pd.DataFrame()
-            st.session_state.stato_giornaliero    = pd.DataFrame(giorno)    if giorno   else pd.DataFrame()
-            st.session_state.storico_presenze     = pd.DataFrame(storico)   if storico  else pd.DataFrame()
+            st.session_state.furgoni             = pd.DataFrame(furgoni)
+            df_anagrafica                        = pd.DataFrame(corrieri) if corrieri else pd.DataFrame()
+            st.session_state.anagrafica_corrieri = df_anagrafica
+            st.session_state.responsabili        = pd.DataFrame(resp)    if resp     else pd.DataFrame()
+            st.session_state.storico_presenze    = pd.DataFrame(storico) if storico  else pd.DataFrame()
+
+            # Ricostruisce stato_giornaliero fondendo con anagrafica se mancano COGNOME/NOME/CELLULARE/GIRO_FISSO
+            df_giorno = pd.DataFrame(giorno) if giorno else pd.DataFrame()
+            colonne_anag = ["COGNOME", "NOME", "CELLULARE", "GIRO_FISSO"]
+            if not df_giorno.empty and not df_anagrafica.empty:
+                mancanti = [c for c in colonne_anag if c not in df_giorno.columns]
+                if mancanti:
+                    df_giorno = df_anagrafica.merge(
+                        df_giorno.drop(columns=[c for c in colonne_anag if c in df_giorno.columns], errors="ignore"),
+                        left_index=True, right_index=True, how="left"
+                    )
+            elif df_giorno.empty and not df_anagrafica.empty:
+                df_giorno = df_anagrafica.copy()
+                df_giorno["STATO"]         = "Presente (Giro Fisso)"
+                df_giorno["GIRO_SUPPORTO"] = ""
+                df_giorno["MEZZO"]         = "Nessuno"
+                df_giorno["KM_INIZIO"]     = 0
+                df_giorno["KM_FINE"]       = 0
+                df_giorno["NOTE"]          = ""
+            st.session_state.stato_giornaliero = df_giorno
             return True
         return False
     except Exception as e:
