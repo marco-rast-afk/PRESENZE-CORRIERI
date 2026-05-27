@@ -617,7 +617,8 @@ if scelta == "📋 Tabellone Presenze":
     df_correnti = st.session_state.stato_giornaliero
     # Garantisce colonne KM anche se df viene da una versione precedente del DB
     for _c, _d in [("KM_INIZIO", 0), ("KM_FINE", 0), ("MEZZO", "Nessuno"),
-                   ("GIRO_SUPPORTO", ""), ("NOTE", ""), ("STATO", "Presente (Giro Fisso)")]:
+                   ("GIRO_SUPPORTO", ""), ("NOTE", ""), ("STATO", "Presente (Giro Fisso)"),
+                   ("CELLULARE", ""), ("GIRO_FISSO", ""), ("COGNOME", ""), ("NOME", "")]:
         if _c not in df_correnti.columns:
             df_correnti[_c] = _d
 
