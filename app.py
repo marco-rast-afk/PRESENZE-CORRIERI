@@ -98,18 +98,24 @@ div[data-testid="stDateInput"] {
     margin-bottom: 4px !important;
 }
 
-/* Nascondi header Streamlit per piu spazio MA mantieni visibile il toggle sidebar */
+/* Minimizza header Streamlit mantenendo visibile il toggle sidebar */
 header[data-testid="stHeader"] {
-    height: 0 !important;
+    height: 2.5rem !important;
     min-height: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Nascondi il logo/branding interno all header ma non il toggle */
+header[data-testid="stHeader"] > * {
     visibility: hidden !important;
 }
 
-/* Ripristina visibilità del bottone per aprire/chiudere la sidebar */
-button[data-testid="collapsedControl"],
-[data-testid="collapsedControl"] {
+/* Mantieni sempre visibile il pulsante toggle sidebar */
+button[data-testid="collapsedControl"] {
     visibility: visible !important;
     display: flex !important;
+    z-index: 999 !important;
 }
 
 /* Riduci margini tra elementi */
