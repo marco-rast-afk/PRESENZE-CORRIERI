@@ -173,16 +173,34 @@ def _sb_upsert(tabella: str, records: list):
     _sb_inserisci(tabella, records)
 
 def _sb_leggi(tabella: str) -> list:
-    """Legge tutti i record di una tabella Supabase."""
-    r = requests.get(
-        _sb_url(tabella) + "?order=id.asc",
-        headers=SB_HEADERS
-    )
-    if r.status_code == 200:
-        rows = r.json()
-        # Rimuovi colonna 'id' (auto-generata, non serve nel DataFrame)
-        return [{k: v for k, v in row.items() if k != "id"} for row in rows]
-    return []
+    """Legge TUTTI i record di una tabella Supabase usando paginazione a blocchi.
+    Supabase REST API restituisce al massimo 1000 righe per richiesta per default.
+    """
+    PAGE_SIZE = 1000
+    tutti = []
+    offset = 0
+    headers_pag = {
+        **SB_HEADERS,
+        "Range-Unit": "items",
+        "Prefer":     "count=none",
+    }
+    while True:
+        fine = offset + PAGE_SIZE - 1
+        headers_pag["Range"] = f"{offset}-{fine}"
+        r = requests.get(
+            _sb_url(tabella) + "?order=id.asc",
+            headers=headers_pag
+        )
+        if r.status_code not in (200, 206):
+            break
+        blocco = r.json()
+        if not blocco:
+            break
+        tutti.extend(blocco)
+        if len(blocco) < PAGE_SIZE:
+            break
+        offset += PAGE_SIZE
+    return [{k: v for k, v in row.items() if k != "id"} for row in tutti]
 
 def salva_database_json():
     """Salva tutti i DataFrame su Supabase."""
@@ -965,6 +983,123 @@ elif scelta == "👥 Anagrafica Personale":
 # ─────────────────────────────────────────────────────────────────────────────
 elif scelta == "📊 Storico & Furgoni":
     st.title("📊 Storico Presenze & Analisi Utilizzo Furgoni")
+
+    # ── PANNELLO IMPORT EXCEL ─────────────────────────────────────────────────
+    with st.expander("📥 Importa giornate da Excel", expanded=False):
+        st.markdown(
+            "Carica il file Excel compilato con le giornate mancanti. "
+            "Le righe con la stessa data già presente nello storico verranno **sovrascritte**."
+        )
+
+        # Download template
+        def _genera_template_bytes():
+            import io as _io
+            from openpyxl import Workbook as _WB
+            from openpyxl.styles import Font as _Font, PatternFill as _Fill, Alignment as _Align, Border as _Border, Side as _Side
+            from openpyxl.worksheet.datavalidation import DataValidation as _DV
+            from openpyxl.utils import get_column_letter as _gcl
+            _corrieri = st.session_state.anagrafica_corrieri[["COGNOME","NOME","CELLULARE","GIRO_FISSO"]].values.tolist()
+            _wb = _WB()
+            _ws = _wb.active
+            _ws.title = "DATI_DA_IMPORTARE"
+            _cols = ["DATA","COGNOME","NOME","CELLULARE","GIRO_FISSO","STATO","MEZZO","KM_INIZIO","NOTE"]
+            _larg = [22,18,14,15,12,26,14,12,30]
+            _fb = _Fill("solid", start_color="1F4E78", end_color="1F4E78")
+            _fg = _Fill("solid", start_color="F2F2F2", end_color="F2F2F2")
+            _fy = _Fill("solid", start_color="FFF2CC", end_color="FFF2CC")
+            _thin = _Side(style="thin", color="D9D9D9")
+            _bord = _Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
+            for c, (col, larg) in enumerate(zip(_cols, _larg), 1):
+                cell = _ws.cell(row=1, column=c, value=col)
+                cell.font = _Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+                cell.fill = _fb
+                cell.alignment = _Align(horizontal="center")
+                _ws.column_dimensions[_gcl(c)].width = larg
+            _dv = _DV(type="list", formula1='"Presente (Giro Fisso),Supporto Altra Filiale,Assente"', showDropDown=False)
+            _ws.add_data_validation(_dv)
+            for r, (cogn, nome, cell_, giro) in enumerate(_corrieri, 2):
+                _ws.row_dimensions[r].height = 17
+                for c, val in enumerate(["", cogn, nome, cell_, giro, "Presente (Giro Fisso)", "Nessuno", 0, ""], 1):
+                    cell = _ws.cell(row=r, column=c, value=val)
+                    cell.font = _Font(name="Calibri", size=10)
+                    cell.border = _bord
+                    if c == 1: cell.fill = _fy
+                    elif c in (2,3,4,5): cell.fill = _fg; cell.font = _Font(name="Calibri", size=10, color="555555")
+                    elif c == 6: _dv.add(cell)
+            _ws.freeze_panes = "A2"
+            buf = _io.BytesIO()
+            _wb.save(buf)
+            return buf.getvalue()
+
+        st.download_button(
+            "📄 Scarica Template Excel",
+            data=_genera_template_bytes(),
+            file_name="template_import_presenze.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            help="Scarica il template con tutti i corrieri già inseriti. Compila la colonna DATA e modifica STATO/MEZZO/KM dove necessario."
+        )
+
+        st.markdown("---")
+        file_import = st.file_uploader(
+            "Carica file Excel compilato (.xlsx)",
+            type=["xlsx"],
+            key="uploader_import_storico"
+        )
+
+        if file_import is not None:
+            try:
+                df_import = pd.read_excel(file_import, sheet_name="DATI_DA_IMPORTARE", dtype=str)
+                df_import.columns = [c.strip().upper() for c in df_import.columns]
+
+                # Rimuovi la riga di esempio (DATA vuota o uguale a "DATA")
+                df_import = df_import[
+                    df_import["DATA"].notna() &
+                    (df_import["DATA"].str.strip() != "") &
+                    (df_import["DATA"].str.strip().str.upper() != "DATA")
+                ].copy()
+
+                # Normalizza colonne numeriche
+                for _nc in ["KM_INIZIO"]:
+                    if _nc in df_import.columns:
+                        df_import[_nc] = pd.to_numeric(df_import[_nc], errors="coerce").fillna(0).astype(int)
+
+                # Assicura colonne mancanti
+                for _mc, _mv in [("KM_FINE", 0), ("KM_PERCORSI", 0), ("NOTE", ""), ("MEZZO", "Nessuno"), ("STATO", "Presente (Giro Fisso)"), ("GIRO_FISSO", "")]:
+                    if _mc not in df_import.columns:
+                        df_import[_mc] = _mv
+
+                df_import["DATA"] = df_import["DATA"].str.strip()
+
+                date_trovate = sorted(df_import["DATA"].unique())
+                n_righe = len(df_import)
+
+                st.info(f"📊 **{n_righe} righe** trovate · **{len(date_trovate)} date**: {', '.join(date_trovate)}")
+
+                col_imp1, col_imp2 = st.columns([1,2])
+                with col_imp1:
+                    if st.button("✅ IMPORTA NELLO STORICO", type="primary", use_container_width=True):
+                        # Rimuovi dal storico attuale le date che stiamo importando
+                        st_att = st.session_state.storico_presenze
+                        if not st_att.empty and "DATA" in st_att.columns:
+                            st_att = st_att[~st_att["DATA"].isin(date_trovate)]
+
+                        # Allinea colonne
+                        colonne_std = ["DATA","COGNOME","NOME","GIRO_FISSO","STATO","MEZZO","KM_INIZIO","KM_FINE","KM_PERCORSI","NOTE"]
+                        for _c in colonne_std:
+                            if _c not in df_import.columns:
+                                df_import[_c] = 0 if _c in ("KM_INIZIO","KM_FINE","KM_PERCORSI") else ""
+
+                        st.session_state.storico_presenze = pd.concat(
+                            [st_att, df_import[colonne_std]], ignore_index=True
+                        )
+                        salva_database_json()
+                        st.success(f"✅ Importate **{n_righe} righe** per le date: {', '.join(date_trovate)}. Database salvato.")
+                        st.rerun()
+                with col_imp2:
+                    st.dataframe(df_import[["DATA","COGNOME","NOME","STATO","MEZZO","KM_INIZIO"]].head(10), hide_index=True, use_container_width=True)
+
+            except Exception as _e:
+                st.error(f"❌ Errore nella lettura del file: {_e}")
 
     storico = st.session_state.storico_presenze.copy()
 
