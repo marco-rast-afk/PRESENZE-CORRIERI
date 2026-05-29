@@ -675,19 +675,18 @@ if st.sidebar.button("➕ NUOVA GIORNATA", use_container_width=True):
                     mezzo_ereditato = r.get("MEZZO", "Nessuno") or "Nessuno"
                     df_nuovo.at[idx, "MEZZO"] = mezzo_ereditato
 
-                # 2. KM_INIZIO nuova giornata = KM_INIZIO della TARGA assegnata oggi
-                #    (i km seguono il furgone, non il corriere)
-                targa_oggi = str(mezzo_ereditato).strip()
-                # Cerca prima nella mappa targa→km del tabellone corrente
-                if targa_oggi and targa_oggi != "Nessuno" and targa_oggi in km_per_targa:
-                    km_inizio_nuovo = km_per_targa[targa_oggi]
+                # 2. KM_INIZIO nuova giornata = KM_INIZIO della TARGA assegnata OGGI
+                #    nel tabellone corrente (dove lo scambio targhe e' gia' avvenuto).
+                #    I km seguono il furgone fisico, non il corriere.
+                match_corr = df_corrente[
+                    (df_corrente["COGNOME"] == cognome) &
+                    (df_corrente["NOME"]    == nome)
+                ]
+                if not match_corr.empty:
+                    targa_oggi = str(match_corr.iloc[0].get("MEZZO", "") or "").strip()
+                    km_inizio_nuovo = km_per_targa.get(targa_oggi, int(match_corr.iloc[0].get("KM_INIZIO", 0) or 0))
                 else:
-                    # Fallback: cerca per corriere nel tabellone corrente
-                    match_corr = df_corrente[
-                        (df_corrente["COGNOME"] == cognome) &
-                        (df_corrente["NOME"]    == nome)
-                    ]
-                    km_inizio_nuovo = int(match_corr.iloc[0].get("KM_INIZIO", 0) or 0) if not match_corr.empty else 0
+                    km_inizio_nuovo = 0
 
                 df_nuovo.at[idx, "KM_INIZIO"] = km_inizio_nuovo
 
@@ -808,7 +807,7 @@ if scelta == "📋 Tabellone Presenze":
             "COGNOME":       st.column_config.TextColumn("Cognome",  disabled=True),
             "NOME":          st.column_config.TextColumn("Nome",     disabled=True),
             "CELLULARE":     st.column_config.TextColumn("Cellulare", disabled=True),
-            "GIRO_FISSO":    None,
+            "GIRO_FISSO":    st.column_config.TextColumn("Giro Fisso", disabled=True),
             "GIRO_SUPPORTO": None,
             "STATO": st.column_config.SelectboxColumn(
                 "Stato Presenza",
