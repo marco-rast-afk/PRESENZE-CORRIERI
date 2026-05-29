@@ -784,27 +784,31 @@ if scelta == "📋 Tabellone Presenze":
                 if "MEZZO" in deltas
             }
 
+            # Mappa targa→km PRIMA di applicare qualsiasi modifica,
+            # così ogni targa porta sempre i propri km originali.
+            col_km    = df_attuale.columns.get_loc("KM_INIZIO")
+            col_mezzo = df_attuale.columns.get_loc("MEZZO")
+            km_snapshot = {}
+            for idx, row in df_attuale.iterrows():
+                targa = str(row.get("MEZZO", "") or "").strip()
+                if targa and targa not in ("Nessuno", "── NON ASSEGNATI ──", "── GIÀ ASSEGNATI ──"):
+                    km_snapshot[targa] = int(row.get("KM_INIZIO", 0) or 0)
+
             for riga_nuova, nuovo_mezzo in righe_modificate_mezzo.items():
                 if nuovo_mezzo in ("Nessuno", "── NON ASSEGNATI ──", "── GIÀ ASSEGNATI ──", ""):
                     continue
-                # Cerca se lo stesso mezzo è presente su un'altra riga
+                # Cerca se lo stesso mezzo è già presente su un'altra riga
                 for idx, row in df_attuale.iterrows():
                     if idx != riga_nuova and row["MEZZO"] == nuovo_mezzo:
-                        # I km seguono la targa: scambia i KM_INIZIO tra le due righe
-                        col_km    = df_attuale.columns.get_loc("KM_INIZIO")
-                        col_mezzo = df_attuale.columns.get_loc("MEZZO")
-                        km_vecchio_proprietario = df_attuale.iat[idx, col_km]
-                        km_nuovo_proprietario   = df_attuale.iat[riga_nuova, col_km]
-                        # Assegna alla riga che cede il furgone i km della targa che riceve
-                        # (recupera il mezzo che la riga_nuova aveva prima, ora spostato)
-                        mezzo_ceduto = df_attuale.iat[riga_nuova, col_mezzo] if "MEZZO" not in edits["edited_rows"].get(riga_nuova, {}) else None
-                        # Scambia i km: la targa porta con sé i propri km
-                        df_attuale.iat[riga_nuova, col_km] = km_vecchio_proprietario
-                        df_attuale.iat[idx, col_km]        = km_nuovo_proprietario
-                        # Libera la targa dalla riga precedente
+                        # La riga che CEDE la targa: km → 0 e targa → Nessuno
+                        # (non ha più un mezzo assegnato, i suoi km non sono attribuibili)
                         df_attuale.iat[idx, col_mezzo] = "Nessuno"
+                        df_attuale.iat[idx, col_km]    = 0
                         nome_prev = f"{df_attuale.iat[idx, df_attuale.columns.get_loc('COGNOME')]} {df_attuale.iat[idx, df_attuale.columns.get_loc('NOME')]}"
-                        st.info(f"ℹ️ Il furgone **{nuovo_mezzo}** (km {km_vecchio_proprietario}) è stato spostato da **{nome_prev}** al nuovo autista.")
+                        # La riga che RICEVE la targa: prende i km dello snapshot di quella targa
+                        km_della_targa = km_snapshot.get(nuovo_mezzo, 0)
+                        df_attuale.iat[riga_nuova, col_km] = km_della_targa
+                        st.info(f"ℹ️ Il furgone **{nuovo_mezzo}** (km {km_della_targa}) assegnato a nuovo autista. **{nome_prev}** senza mezzo (km azzerati).")
                         break
 
             # Pulisci eventuali voci-separatore selezionate per errore
