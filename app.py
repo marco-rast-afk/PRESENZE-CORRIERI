@@ -794,13 +794,18 @@ if scelta == "📋 Tabellone Presenze":
             # più volte i km originali restano sempre disponibili.
             if "_km_snapshot_giornata" not in st.session_state:
                 st.session_state["_km_snapshot_giornata"] = {}
-            # Aggiorna lo snapshot solo per le targhe che NON sono già tracciate
-            # (nuove targhe aggiunte nel corso della giornata)
-            for idx, row in st.session_state.stato_giornaliero.iterrows():
+            # Aggiorna lo snapshot leggendo il df_attuale PRIMA degli spostamenti,
+            # includendo anche le targhe che stanno per essere cedute in questa operazione.
+            # Fonte: df_attuale che contiene i delta già applicati ma non ancora gli scambi.
+            for idx, row in df_attuale.iterrows():
                 targa = str(row.get("MEZZO", "") or "").strip()
+                km    = int(row.get("KM_INIZIO", 0) or 0)
                 if targa and targa not in ("Nessuno", "── NON ASSEGNATI ──", "── GIÀ ASSEGNATI ──"):
                     if targa not in st.session_state["_km_snapshot_giornata"]:
-                        st.session_state["_km_snapshot_giornata"][targa] = int(row.get("KM_INIZIO", 0) or 0)
+                        st.session_state["_km_snapshot_giornata"][targa] = km
+                    # Aggiorna anche se i km erano 0 e ora sono > 0 (targa appena assegnata con km)
+                    elif km > 0 and st.session_state["_km_snapshot_giornata"][targa] == 0:
+                        st.session_state["_km_snapshot_giornata"][targa] = km
             km_snapshot = st.session_state["_km_snapshot_giornata"]
 
             for riga_nuova, nuovo_mezzo in righe_modificate_mezzo.items():
