@@ -631,7 +631,9 @@ if st.sidebar.button("➕ NUOVA GIORNATA", use_container_width=True):
         storico_valido = storico_ref[storico_ref["_data_dt"].notna()]
 
         if storico_valido.empty:
-            st.sidebar.warning("⚠️ Nessuna data valida trovata nello storico.")
+            # DEBUG: mostra i valori reali della colonna DATA per capire il formato
+            sample = storico_ref["DATA"].dropna().head(3).tolist()
+            st.sidebar.warning(f"⚠️ Nessuna data valida trovata nello storico. Esempi DATA: {sample}")
         else:
             data_max_dt   = storico_valido["_data_dt"].max()
             data_max_label = storico_valido[storico_valido["_data_dt"] == data_max_dt].iloc[0]["DATA"]
