@@ -790,10 +790,21 @@ if scelta == "📋 Tabellone Presenze":
                 # Cerca se lo stesso mezzo è presente su un'altra riga
                 for idx, row in df_attuale.iterrows():
                     if idx != riga_nuova and row["MEZZO"] == nuovo_mezzo:
-                        # Libera la riga che aveva il furgone in precedenza
-                        df_attuale.iat[idx, df_attuale.columns.get_loc("MEZZO")] = "Nessuno"
+                        # I km seguono la targa: scambia i KM_INIZIO tra le due righe
+                        col_km    = df_attuale.columns.get_loc("KM_INIZIO")
+                        col_mezzo = df_attuale.columns.get_loc("MEZZO")
+                        km_vecchio_proprietario = df_attuale.iat[idx, col_km]
+                        km_nuovo_proprietario   = df_attuale.iat[riga_nuova, col_km]
+                        # Assegna alla riga che cede il furgone i km della targa che riceve
+                        # (recupera il mezzo che la riga_nuova aveva prima, ora spostato)
+                        mezzo_ceduto = df_attuale.iat[riga_nuova, col_mezzo] if "MEZZO" not in edits["edited_rows"].get(riga_nuova, {}) else None
+                        # Scambia i km: la targa porta con sé i propri km
+                        df_attuale.iat[riga_nuova, col_km] = km_vecchio_proprietario
+                        df_attuale.iat[idx, col_km]        = km_nuovo_proprietario
+                        # Libera la targa dalla riga precedente
+                        df_attuale.iat[idx, col_mezzo] = "Nessuno"
                         nome_prev = f"{df_attuale.iat[idx, df_attuale.columns.get_loc('COGNOME')]} {df_attuale.iat[idx, df_attuale.columns.get_loc('NOME')]}"
-                        st.info(f"ℹ️ Il furgone **{nuovo_mezzo}** è stato spostato da **{nome_prev}** al nuovo autista.")
+                        st.info(f"ℹ️ Il furgone **{nuovo_mezzo}** (km {km_vecchio_proprietario}) è stato spostato da **{nome_prev}** al nuovo autista.")
                         break
 
             # Pulisci eventuali voci-separatore selezionate per errore
