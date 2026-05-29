@@ -150,22 +150,26 @@ def parse_data_ita(s):
 # ─────────────────────────────────────────────────────────────────────────────
 def _sb_truncate(tabella: str):
     """Svuota la tabella via SQL RPC (unico modo affidabile in Supabase)."""
-    requests.post(
+    r = requests.post(
         f"{SUPABASE_URL}/rest/v1/rpc/truncate_table",
         headers={**SB_HEADERS, "Content-Type": "application/json"},
         data=json.dumps({"table_name": tabella})
     )
+    if r.status_code not in (200, 204):
+        st.warning(f"⚠️ Errore truncate '{tabella}': HTTP {r.status_code} — {r.text}")
 
 def _sb_inserisci(tabella: str, records: list):
     """Inserisce una lista di record nella tabella."""
     if not records:
         return
     puliti = [{k: v for k, v in r.items() if k != "id"} for r in records]
-    requests.post(
+    resp = requests.post(
         _sb_url(tabella),
         headers={**SB_HEADERS, "Content-Type": "application/json"},
         data=json.dumps(puliti)
     )
+    if resp.status_code not in (200, 201):
+        st.warning(f"⚠️ Errore inserimento '{tabella}': HTTP {resp.status_code} — {resp.text}")
 
 def _sb_upsert(tabella: str, records: list):
     """Svuota la tabella e reinserisce i record aggiornati."""
