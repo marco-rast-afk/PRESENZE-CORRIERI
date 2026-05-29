@@ -184,12 +184,17 @@ def _sb_inserisci(tabella: str, records: list):
     if not records:
         return
     puliti = _filtra_colonne(tabella, [{k: v for k, v in r.items() if k != "id"} for r in records])
-    if not puliti:
+    # Scarta lista vuota O lista di dizionari tutti vuoti {}
+    if not puliti or all(len(r) == 0 for r in puliti):
+        return
+    payload = json.dumps(puliti)
+    # Doppia sicurezza: non inviare se il payload è [] o stringa vuota
+    if payload in ("[]", "", "null"):
         return
     resp = requests.post(
         _sb_url(tabella),
         headers={**SB_HEADERS, "Content-Type": "application/json"},
-        data=json.dumps(puliti)
+        data=payload
     )
     if resp.status_code not in (200, 201):
         _log_errore_sb(f"inserimento '{tabella}'", resp.status_code, resp.text)
@@ -204,6 +209,9 @@ def _log_errore_sb(operazione: str, status: int, testo: str):
 def _sb_upsert(tabella: str, records: list):
     """Svuota la tabella e reinserisce i record aggiornati."""
     _sb_truncate(tabella)
+    # Non inviare mai una POST con lista vuota: Supabase risponde PGRST102
+    if not records:
+        return
     _sb_inserisci(tabella, records)
 
 def _sb_leggi(tabella: str) -> list:
@@ -236,16 +244,34 @@ def _sb_leggi(tabella: str) -> list:
         offset += PAGE_SIZE
     return [{k: v for k, v in row.items() if k != "id"} for row in tutti]
 
+def _df_to_records(df) -> list:
+    """Serializza un DataFrame in lista di dict puliti (NaN→None, tipi nativi)."""
+    import math
+    if df is None or df.empty:
+        return []
+    records = []
+    for row in df.to_dict(orient="records"):
+        pulito = {}
+        for k, v in row.items():
+            if isinstance(v, float) and math.isnan(v):
+                pulito[k] = None
+            elif hasattr(v, "item"):          # numpy int/float → Python nativo
+                pulito[k] = v.item()
+            else:
+                pulito[k] = v
+        records.append(pulito)
+    return records
+
 def salva_database_json():
     """Salva tutti i DataFrame su Supabase."""
     # Azzera log errori precedenti
     st.session_state["_sb_errori"] = []
     try:
-        _sb_upsert("furgoni",            st.session_state.furgoni.to_dict(orient="records"))
-        _sb_upsert("anagrafica_corrieri", st.session_state.anagrafica_corrieri.to_dict(orient="records"))
-        _sb_upsert("responsabili",        st.session_state.responsabili.to_dict(orient="records"))
-        _sb_upsert("stato_giornaliero",   st.session_state.stato_giornaliero.to_dict(orient="records"))
-        _sb_upsert("storico_presenze",    st.session_state.storico_presenze.to_dict(orient="records"))
+        _sb_upsert("furgoni",            _df_to_records(st.session_state.furgoni))
+        _sb_upsert("anagrafica_corrieri", _df_to_records(st.session_state.anagrafica_corrieri))
+        _sb_upsert("responsabili",        _df_to_records(st.session_state.responsabili))
+        _sb_upsert("stato_giornaliero",   _df_to_records(st.session_state.stato_giornaliero))
+        _sb_upsert("storico_presenze",    _df_to_records(st.session_state.storico_presenze))
         errori = st.session_state.get("_sb_errori", [])
         if errori:
             st.session_state["_sb_esito"] = ("warning", errori)
