@@ -333,6 +333,7 @@ def carica_database_json():
                 df_giorno["KM_INIZIO"]     = 0
                 df_giorno["NOTE"]          = ""
             st.session_state.stato_giornaliero = df_giorno
+            st.session_state["_km_snapshot_giornata"] = {}  # reset snapshot
             return True
         return False
     except Exception as e:
@@ -707,6 +708,7 @@ if st.sidebar.button("➕ NUOVA GIORNATA", use_container_width=True):
                         st.session_state.storico_presenze.loc[mask, "KM_PERCORSI"] = max(km_inizio_nuovo - km_i_prec, 0)
 
             st.session_state.stato_giornaliero = df_nuovo
+            st.session_state["_km_snapshot_giornata"] = {}  # reset snapshot nuova giornata
             salva_database_json()
             if data_max_dt != _date.today():
                 st.sidebar.success(f"✅ Nuova giornata creata! Dati ereditati dal **{data_max_label}**. Km Fine di quella giornata aggiornati nello storico.")
@@ -784,15 +786,22 @@ if scelta == "📋 Tabellone Presenze":
                 if "MEZZO" in deltas
             }
 
-            # Mappa targa→km PRIMA di applicare qualsiasi modifica,
-            # così ogni targa porta sempre i propri km originali.
             col_km    = df_attuale.columns.get_loc("KM_INIZIO")
             col_mezzo = df_attuale.columns.get_loc("MEZZO")
-            km_snapshot = {}
-            for idx, row in df_attuale.iterrows():
+
+            # Lo snapshot targa→km viene costruito UNA SOLA VOLTA per giornata
+            # e conservato in session_state. Così anche se sposti la stessa targa
+            # più volte i km originali restano sempre disponibili.
+            if "_km_snapshot_giornata" not in st.session_state:
+                st.session_state["_km_snapshot_giornata"] = {}
+            # Aggiorna lo snapshot solo per le targhe che NON sono già tracciate
+            # (nuove targhe aggiunte nel corso della giornata)
+            for idx, row in st.session_state.stato_giornaliero.iterrows():
                 targa = str(row.get("MEZZO", "") or "").strip()
                 if targa and targa not in ("Nessuno", "── NON ASSEGNATI ──", "── GIÀ ASSEGNATI ──"):
-                    km_snapshot[targa] = int(row.get("KM_INIZIO", 0) or 0)
+                    if targa not in st.session_state["_km_snapshot_giornata"]:
+                        st.session_state["_km_snapshot_giornata"][targa] = int(row.get("KM_INIZIO", 0) or 0)
+            km_snapshot = st.session_state["_km_snapshot_giornata"]
 
             for riga_nuova, nuovo_mezzo in righe_modificate_mezzo.items():
                 if nuovo_mezzo in ("Nessuno", "── NON ASSEGNATI ──", "── GIÀ ASSEGNATI ──", ""):
