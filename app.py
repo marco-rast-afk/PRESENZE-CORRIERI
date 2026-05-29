@@ -578,9 +578,45 @@ if _esito:
         for _m in _msgs:
             st.sidebar.error(f"❌ Errore: {_m}")
 
-# ── TASTO RICALCOLO KM PERCORSI ──────────────────────────────────────────────
+# ── STRUMENTI ────────────────────────────────────────────────────────────────
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔧 Strumenti")
+
+# Tasto AGGIORNA KM DA STORICO
+st.sidebar.caption("Aggiorna i Km Inizio del tabellone leggendo i Km Fine dell'ultimo giorno in storico per ogni targa. Usare dopo aver cambiato le assegnazioni furgoni.")
+if st.sidebar.button("🔄 AGGIORNA KM DA STORICO", use_container_width=True):
+    storico = st.session_state.storico_presenze.copy()
+    df_tab  = st.session_state.stato_giornaliero.copy()
+    if storico.empty:
+        st.sidebar.warning("⚠️ Storico vuoto, nessun dato disponibile.")
+    else:
+        # Trova l'ultima data valida nello storico
+        storico["_dt"] = storico["DATA"].apply(parse_data_ita)
+        storico_valido  = storico.dropna(subset=["_dt"])
+        if storico_valido.empty:
+            st.sidebar.warning("⚠️ Nessuna data valida nello storico.")
+        else:
+            data_max_dt = storico_valido["_dt"].max()
+            # Mappa MEZZO → KM_FINE dell'ultimo giorno
+            ult_giorno = storico_valido[storico_valido["_dt"] == data_max_dt]
+            km_fine_per_targa = {}
+            for _, row in ult_giorno.iterrows():
+                targa  = str(row.get("MEZZO", "") or "").strip()
+                km_fine = int(row.get("KM_FINE", 0) or 0)
+                if targa and targa != "Nessuno":
+                    km_fine_per_targa[targa] = km_fine
+            # Aggiorna KM_INIZIO nel tabellone per ogni targa trovata
+            aggiornati = 0
+            for idx, row in df_tab.iterrows():
+                targa = str(row.get("MEZZO", "") or "").strip()
+                if targa and targa != "Nessuno" and targa in km_fine_per_targa:
+                    df_tab.at[idx, "KM_INIZIO"] = km_fine_per_targa[targa]
+                    aggiornati += 1
+            st.session_state.stato_giornaliero = df_tab
+            salva_database_json()
+            st.sidebar.success(f"✅ Aggiornate {aggiornati} targhe con i Km Fine del {data_max_dt.strftime('%d/%m/%Y')}.")
+
+st.sidebar.markdown("---")
 st.sidebar.caption("Ricalcola i Km Percorsi nello storico come KM_FINE − KM_INIZIO per ogni riga. Utile se i dati sono stati inseriti manualmente su Supabase.")
 
 if st.sidebar.button("🔄 RICALCOLA KM PERCORSI", use_container_width=True):
@@ -789,38 +825,17 @@ if scelta == "📋 Tabellone Presenze":
             col_km    = df_attuale.columns.get_loc("KM_INIZIO")
             col_mezzo = df_attuale.columns.get_loc("MEZZO")
 
-            # Lo snapshot targa→km viene costruito UNA SOLA VOLTA per giornata
-            # leggendo il DataFrame ORIGINALE (prima dei delta) e conservato in session_state.
-            # Garantisce che ogni targa mantenga sempre i km di inizio giornata
-            # indipendentemente da quante volte viene spostata.
-            if "_km_snapshot_giornata" not in st.session_state:
-                st.session_state["_km_snapshot_giornata"] = {}
-            df_originale = st.session_state.stato_giornaliero  # prima dei delta
-            for idx, row in df_originale.iterrows():
-                targa = str(row.get("MEZZO", "") or "").strip()
-                km    = int(row.get("KM_INIZIO", 0) or 0)
-                if targa and targa not in ("Nessuno", "── NON ASSEGNATI ──", "── GIÀ ASSEGNATI ──"):
-                    if targa not in st.session_state["_km_snapshot_giornata"]:
-                        st.session_state["_km_snapshot_giornata"][targa] = km
-                    elif km > 0 and st.session_state["_km_snapshot_giornata"][targa] == 0:
-                        st.session_state["_km_snapshot_giornata"][targa] = km
-            km_snapshot = st.session_state["_km_snapshot_giornata"]
-
+            # Anti-duplicato semplificato: se la targa è già su un'altra riga, libera quella riga.
+            # I KM_INIZIO vengono gestiti dal tasto AGGIORNA KM DA STORICO.
             for riga_nuova, nuovo_mezzo in righe_modificate_mezzo.items():
                 if nuovo_mezzo in ("Nessuno", "── NON ASSEGNATI ──", "── GIÀ ASSEGNATI ──", ""):
                     continue
-                # Cerca se lo stesso mezzo è già presente su un'altra riga
                 for idx, row in df_attuale.iterrows():
                     if idx != riga_nuova and row["MEZZO"] == nuovo_mezzo:
-                        # La riga che CEDE la targa: km → 0 e targa → Nessuno
-                        # (non ha più un mezzo assegnato, i suoi km non sono attribuibili)
                         df_attuale.iat[idx, col_mezzo] = "Nessuno"
                         df_attuale.iat[idx, col_km]    = 0
                         nome_prev = f"{df_attuale.iat[idx, df_attuale.columns.get_loc('COGNOME')]} {df_attuale.iat[idx, df_attuale.columns.get_loc('NOME')]}"
-                        # La riga che RICEVE la targa: prende i km dello snapshot di quella targa
-                        km_della_targa = km_snapshot.get(nuovo_mezzo, 0)
-                        df_attuale.iat[riga_nuova, col_km] = km_della_targa
-                        st.info(f"ℹ️ Il furgone **{nuovo_mezzo}** (km {km_della_targa}) assegnato a nuovo autista. **{nome_prev}** senza mezzo (km azzerati).")
+                        st.info(f"ℹ️ Il furgone **{nuovo_mezzo}** spostato da **{nome_prev}**. Premi 'Aggiorna KM da Storico' per aggiornare i chilometri.")
                         break
 
             # Pulisci eventuali voci-separatore selezionate per errore
