@@ -804,7 +804,7 @@ if scelta == "📋 Tabellone Presenze":
                 width="medium"
             ),
             "KM_INIZIO": st.column_config.NumberColumn("Km Inizio Giornata", min_value=0, step=1, width="small"),
-            "NOTE": st.column_config.TextColumn("Note Operative", width="large")
+            "NOTE": st.column_config.TextColumn("Note Operative", width="medium")
         },
         hide_index=True,
         use_container_width=True,
