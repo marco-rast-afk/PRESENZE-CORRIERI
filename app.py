@@ -133,16 +133,34 @@ MESI_ITA = {
 }
 
 def parse_data_ita(s):
-    """Converte stringa 'G MESE AAAA' in datetime.date. Ritorna None se fallisce."""
+    """Converte stringa data in datetime.date.
+    Supporta:
+      - formato italiano testuale : '27 MAGGIO 2026'
+      - formato ISO                : '2026-05-27'
+      - formato ISO con timestamp  : '2026-05-27T00:00:00' / '2026-05-27 00:00:00'
+      - formato IT slash/dot       : '27/05/2026' o '27.05.2026'
+    Ritorna None se fallisce.
+    """
+    if s is None:
+        return None
+    s = str(s).strip()
+    # 1) Formato italiano testuale: '27 MAGGIO 2026'
     try:
         mesi_inv = {v: k for k, v in MESI_ITA.items()}
-        parti = str(s).strip().split()
+        parti = s.split()
         if len(parti) == 3:
             g, m, a = int(parti[0]), mesi_inv.get(parti[1].upper(), 0), int(parti[2])
             if m:
                 return datetime(a, m, g).date()
     except Exception:
         pass
+    # 2) Formati numerici: ISO, ISO+timestamp, slash, dot
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
+                "%d/%m/%Y", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(s[:len(fmt)], fmt).date()
+        except Exception:
+            pass
     return None
 
 # ─────────────────────────────────────────────────────────────────────────────
