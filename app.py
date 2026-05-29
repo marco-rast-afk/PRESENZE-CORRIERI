@@ -691,20 +691,28 @@ if st.sidebar.button("➕ NUOVA GIORNATA", use_container_width=True):
                 df_nuovo.at[idx, "KM_INIZIO"] = km_inizio_nuovo
 
                 # 3. Aggiorna KM_FINE e KM_PERCORSI del giorno precedente nello storico
-                #    Per il giorno precedente cerca la riga con la stessa TARGA (non solo corriere)
-                mask = (
-                    (st.session_state.storico_presenze["DATA"]    == data_max_label) &
-                    (st.session_state.storico_presenze["COGNOME"] == cognome) &
-                    (st.session_state.storico_presenze["NOME"]    == nome)
-                )
-                if mask.any():
-                    km_i_prec = int(st.session_state.storico_presenze.loc[mask, "KM_INIZIO"].iloc[0] or 0)
-                    st.session_state.storico_presenze.loc[mask, "KM_FINE"]     = km_inizio_nuovo
-                    st.session_state.storico_presenze.loc[mask, "KM_PERCORSI"] = max(km_inizio_nuovo - km_i_prec, 0)
+                #    SOLO se la data massima dello storico NON è oggi:
+                #    se si crea una nuova giornata nello stesso giorno i km finali
+                #    non devono essere sovrascritti (non sono ancora noti).
+                from datetime import date as _date
+                oggi_dt = _date.today()
+                if data_max_dt != oggi_dt:
+                    mask = (
+                        (st.session_state.storico_presenze["DATA"]    == data_max_label) &
+                        (st.session_state.storico_presenze["COGNOME"] == cognome) &
+                        (st.session_state.storico_presenze["NOME"]    == nome)
+                    )
+                    if mask.any():
+                        km_i_prec = int(st.session_state.storico_presenze.loc[mask, "KM_INIZIO"].iloc[0] or 0)
+                        st.session_state.storico_presenze.loc[mask, "KM_FINE"]     = km_inizio_nuovo
+                        st.session_state.storico_presenze.loc[mask, "KM_PERCORSI"] = max(km_inizio_nuovo - km_i_prec, 0)
 
             st.session_state.stato_giornaliero = df_nuovo
             salva_database_json()
-            st.sidebar.success(f"✅ Nuova giornata creata! Dati ereditati dal **{data_max_label}**. Km Fine di quella giornata aggiornati nello storico.")
+            if data_max_dt != _date.today():
+                st.sidebar.success(f"✅ Nuova giornata creata! Dati ereditati dal **{data_max_label}**. Km Fine di quella giornata aggiornati nello storico.")
+            else:
+                st.sidebar.success(f"✅ Nuova giornata creata! Dati ereditati dal **{data_max_label}**. Km Fine NON aggiornati (stessa giornata).")
 
 # ── ESPORTA (visibili solo nella scheda Tabellone) ──────────
 if scelta == "📋 Tabellone Presenze" and st.session_state.get("excel_sidebar_data") is not None:
