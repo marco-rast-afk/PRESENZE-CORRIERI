@@ -590,11 +590,13 @@ if st.sidebar.button("🔄 AGGIORNA KM DA STORICO", use_container_width=True):
     if storico.empty:
         st.sidebar.warning("⚠️ Storico vuoto, nessun dato disponibile.")
     else:
-        # Trova l'ultima data valida nello storico
+        # Trova l'ultima data valida nello storico PRECEDENTE a oggi
+        from datetime import date as _date
         storico["_dt"] = storico["DATA"].apply(parse_data_ita)
         storico_valido  = storico.dropna(subset=["_dt"])
+        storico_valido  = storico_valido[storico_valido["_dt"] < _date.today()]
         if storico_valido.empty:
-            st.sidebar.warning("⚠️ Nessuna data valida nello storico.")
+            st.sidebar.warning("⚠️ Nessuna data precedente a oggi nello storico.")
         else:
             data_max_dt = storico_valido["_dt"].max()
             # Mappa MEZZO → KM_FINE dell'ultimo giorno
