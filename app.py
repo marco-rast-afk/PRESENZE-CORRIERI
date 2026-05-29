@@ -1375,8 +1375,11 @@ elif scelta == "📊 Storico & Furgoni":
             else:
                 # ── Riepilogo tutti i furgoni ──
                 st.markdown("##### 📊 Riepilogo generale")
+                # Escludi righe con KM_FINE = 0 o nullo (giornata non chiusa)
+                # dal calcolo di giorni, km totali e media
+                df_fur_chiuso = df_fur[df_fur["KM_FINE"].fillna(0).astype(int) > 0]
                 riepilogo = (
-                    df_fur.groupby("MEZZO")
+                    df_fur_chiuso.groupby("MEZZO")
                     .agg(
                         Giorni_Utilizzo=("DATA", "nunique"),
                         Km_Totali=("KM_PERCORSI", "sum"),
@@ -1433,7 +1436,7 @@ elif scelta == "📊 Storico & Furgoni":
                     targa       = row_riepilogo["Furgone"]
                     giorni_uso  = int(row_riepilogo["Giorni_Utilizzo"])
                     km_tot      = int(row_riepilogo["Km_Totali"])
-                    km_medi     = float(row_riepilogo["Km_Medi_Giorno"])
+                    km_medi     = round(float(row_riepilogo["Km_Medi_Giorno"]), 1)
                     n_autisti   = int(row_riepilogo["Autisti_Diversi"])
 
                     label_exp = (
