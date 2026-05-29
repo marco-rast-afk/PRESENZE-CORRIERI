@@ -175,7 +175,7 @@ _COLONNE_SUPABASE = {
     "furgoni":            ["MARCA", "MODELLO", "TIPO", "TARGA", "DISPONIBILE"],
     "anagrafica_corrieri":["COGNOME", "NOME", "CELLULARE", "GIRO_FISSO"],
     "responsabili":       ["COGNOME", "NOME", "RUOLO"],
-    "stato_giornaliero":  ["COGNOME", "NOME", "CELLULARE", "GIRO_FISSO",
+    "stato_giornaliero":  ["COGNOME", "NOME", "CELLULARE", "GIRO_FISSO", "GIRO_SUPPORTO",
                            "STATO", "MEZZO", "KM_INIZIO", "NOTE"],
     "storico_presenze":   ["DATA", "COGNOME", "NOME", "GIRO_FISSO", "STATO",
                            "MEZZO", "KM_INIZIO", "KM_FINE", "KM_PERCORSI", "NOTE"],
@@ -610,7 +610,7 @@ if st.sidebar.button("🔄 RICALCOLA KM PERCORSI", use_container_width=True):
 # ── TASTO NUOVA GIORNATA ─────────────────────────────────────────────────────
 st.sidebar.markdown("---")
 st.sidebar.subheader("📅 Nuova Giornata")
-st.sidebar.caption("Crea il tabellone del giorno successivo ereditando Stato e Furgone dall'ultima giornata archiviata. I Km Inizio vengono impostati pari ai Km Inizio dell'ultima giornata (il sistema aggiorna i Km Fine/Percorsi del giorno precedente in automatico).")
+st.sidebar.caption("Crea il tabellone del giorno successivo ereditando Stato e Furgone dall'ultima giornata archiviata. I Km Inizio seguono la targa del furgone: se un mezzo cambia corriere i km restano legati al veicolo.")
 
 if st.sidebar.button("➕ NUOVA GIORNATA", use_container_width=True):
     storico_ref = st.session_state.storico_presenze.copy()
@@ -648,6 +648,17 @@ if st.sidebar.button("➕ NUOVA GIORNATA", use_container_width=True):
             # Recupera Km Inizio corrente dal tabellone attivo (= i km del giorno in corso)
             df_corrente = st.session_state.stato_giornaliero.copy()
 
+            # Mappa TARGA → KM_INIZIO dal tabellone corrente
+            # I km sono legati alla targa, non al corriere: se il furgone cambia
+            # mano tra un giorno e l'altro i km devono seguire il mezzo.
+            km_per_targa = {}
+            for _, row in df_corrente.iterrows():
+                targa = str(row.get("MEZZO", "") or "").strip()
+                km    = int(row.get("KM_INIZIO", 0) or 0)
+                if targa and targa != "Nessuno":
+                    # Se lo stesso furgone è assegnato a più corrieri prendi il massimo
+                    km_per_targa[targa] = max(km_per_targa.get(targa, 0), km)
+
             for idx in df_nuovo.index:
                 cognome = df_nuovo.at[idx, "COGNOME"]
                 nome    = df_nuovo.at[idx, "NOME"]
@@ -657,33 +668,40 @@ if st.sidebar.button("➕ NUOVA GIORNATA", use_container_width=True):
                     (righe_ref["COGNOME"] == cognome) &
                     (righe_ref["NOME"]    == nome)
                 ]
+                mezzo_ereditato = "Nessuno"
                 if not match_st.empty:
                     r = match_st.iloc[0]
                     df_nuovo.at[idx, "STATO"] = r.get("STATO", "Presente (Giro Fisso)")
-                    df_nuovo.at[idx, "MEZZO"] = r.get("MEZZO", "Nessuno")
+                    mezzo_ereditato = r.get("MEZZO", "Nessuno") or "Nessuno"
+                    df_nuovo.at[idx, "MEZZO"] = mezzo_ereditato
 
-                # 2. KM_INIZIO nuova giornata = KM_INIZIO del tabellone corrente
-                #    (cioè i km che erano stati inseriti stamattina, che diventano
-                #     km fine della giornata che si sta chiudendo)
-                match_corr = df_corrente[
-                    (df_corrente["COGNOME"] == cognome) &
-                    (df_corrente["NOME"]    == nome)
-                ]
-                if not match_corr.empty:
-                    km_inizio_nuovo = int(match_corr.iloc[0].get("KM_INIZIO", 0) or 0)
-                    df_nuovo.at[idx, "KM_INIZIO"] = km_inizio_nuovo
+                # 2. KM_INIZIO nuova giornata = KM_INIZIO della TARGA assegnata oggi
+                #    (i km seguono il furgone, non il corriere)
+                targa_oggi = str(mezzo_ereditato).strip()
+                # Cerca prima nella mappa targa→km del tabellone corrente
+                if targa_oggi and targa_oggi != "Nessuno" and targa_oggi in km_per_targa:
+                    km_inizio_nuovo = km_per_targa[targa_oggi]
+                else:
+                    # Fallback: cerca per corriere nel tabellone corrente
+                    match_corr = df_corrente[
+                        (df_corrente["COGNOME"] == cognome) &
+                        (df_corrente["NOME"]    == nome)
+                    ]
+                    km_inizio_nuovo = int(match_corr.iloc[0].get("KM_INIZIO", 0) or 0) if not match_corr.empty else 0
 
-                    # 3. Aggiorna KM_FINE e KM_PERCORSI del giorno precedente nello storico
-                    #    usando i KM_INIZIO della nuova giornata come KM_FINE di quella vecchia
-                    mask = (
-                        (st.session_state.storico_presenze["DATA"]    == data_max_label) &
-                        (st.session_state.storico_presenze["COGNOME"] == cognome) &
-                        (st.session_state.storico_presenze["NOME"]    == nome)
-                    )
-                    if mask.any():
-                        km_i_prec = int(st.session_state.storico_presenze.loc[mask, "KM_INIZIO"].iloc[0] or 0)
-                        st.session_state.storico_presenze.loc[mask, "KM_FINE"]     = km_inizio_nuovo
-                        st.session_state.storico_presenze.loc[mask, "KM_PERCORSI"] = max(km_inizio_nuovo - km_i_prec, 0)
+                df_nuovo.at[idx, "KM_INIZIO"] = km_inizio_nuovo
+
+                # 3. Aggiorna KM_FINE e KM_PERCORSI del giorno precedente nello storico
+                #    Per il giorno precedente cerca la riga con la stessa TARGA (non solo corriere)
+                mask = (
+                    (st.session_state.storico_presenze["DATA"]    == data_max_label) &
+                    (st.session_state.storico_presenze["COGNOME"] == cognome) &
+                    (st.session_state.storico_presenze["NOME"]    == nome)
+                )
+                if mask.any():
+                    km_i_prec = int(st.session_state.storico_presenze.loc[mask, "KM_INIZIO"].iloc[0] or 0)
+                    st.session_state.storico_presenze.loc[mask, "KM_FINE"]     = km_inizio_nuovo
+                    st.session_state.storico_presenze.loc[mask, "KM_PERCORSI"] = max(km_inizio_nuovo - km_i_prec, 0)
 
             st.session_state.stato_giornaliero = df_nuovo
             salva_database_json()
@@ -790,7 +808,8 @@ if scelta == "📋 Tabellone Presenze":
             "COGNOME":       st.column_config.TextColumn("Cognome",  disabled=True),
             "NOME":          st.column_config.TextColumn("Nome",     disabled=True),
             "CELLULARE":     st.column_config.TextColumn("Cellulare", disabled=True),
-            "GIRO_FISSO":    st.column_config.TextColumn("Giro Fisso", disabled=True),
+            "GIRO_FISSO":    None,
+            "GIRO_SUPPORTO": None,
             "STATO": st.column_config.SelectboxColumn(
                 "Stato Presenza",
                 options=["Presente (Giro Fisso)", "Supporto Altra Filiale", "Affiancamento", "Assente"],
