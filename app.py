@@ -155,10 +155,11 @@ def parse_data_ita(s):
     except Exception:
         pass
     # 2) Formati numerici: ISO, ISO+timestamp, slash, dot
+    s_clean = s.split(".")[0]  # rimuove eventuale .microseconds
     for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
                 "%d/%m/%Y", "%d.%m.%Y"):
         try:
-            return datetime.strptime(s[:len(fmt)], fmt).date()
+            return datetime.strptime(s_clean, fmt).date()
         except Exception:
             pass
     return None
@@ -631,9 +632,7 @@ if st.sidebar.button("➕ NUOVA GIORNATA", use_container_width=True):
         storico_valido = storico_ref[storico_ref["_data_dt"].notna()]
 
         if storico_valido.empty:
-            # DEBUG: mostra i valori reali della colonna DATA per capire il formato
-            sample = storico_ref["DATA"].dropna().head(3).tolist()
-            st.sidebar.warning(f"⚠️ Nessuna data valida trovata nello storico. Esempi DATA: {sample}")
+            st.sidebar.warning("⚠️ Nessuna data valida trovata nello storico.")
         else:
             data_max_dt   = storico_valido["_data_dt"].max()
             data_max_label = storico_valido[storico_valido["_data_dt"] == data_max_dt].iloc[0]["DATA"]
