@@ -663,27 +663,26 @@ if st.sidebar.button("➕ NUOVA GIORNATA", use_container_width=True):
                 cognome = df_nuovo.at[idx, "COGNOME"]
                 nome    = df_nuovo.at[idx, "NOME"]
 
-                # 1. Eredita STATO e MEZZO dall'ultima giornata archiviata
+                # 1. Eredita STATO dallo storico, MEZZO dal tabellone corrente
+                #    Il MEZZO viene sempre preso dal tabellone corrente: se le targhe
+                #    sono state scambiate prima di premere Nuova Giornata, la nuova
+                #    giornata eredita la targa corrente (corretta), non quella dello storico.
                 match_st = righe_ref[
                     (righe_ref["COGNOME"] == cognome) &
                     (righe_ref["NOME"]    == nome)
                 ]
-                mezzo_ereditato = "Nessuno"
                 if not match_st.empty:
-                    r = match_st.iloc[0]
-                    df_nuovo.at[idx, "STATO"] = r.get("STATO", "Presente (Giro Fisso)")
-                    mezzo_ereditato = r.get("MEZZO", "Nessuno") or "Nessuno"
-                    df_nuovo.at[idx, "MEZZO"] = mezzo_ereditato
+                    df_nuovo.at[idx, "STATO"] = match_st.iloc[0].get("STATO", "Presente (Giro Fisso)")
 
-                # 2. KM_INIZIO nuova giornata = KM_INIZIO della TARGA assegnata OGGI
-                #    nel tabellone corrente (dove lo scambio targhe e' gia' avvenuto).
-                #    I km seguono il furgone fisico, non il corriere.
                 match_corr = df_corrente[
                     (df_corrente["COGNOME"] == cognome) &
                     (df_corrente["NOME"]    == nome)
                 ]
+
+                # 2. MEZZO e KM_INIZIO dalla targa attuale nel tabellone corrente
                 if not match_corr.empty:
-                    targa_oggi = str(match_corr.iloc[0].get("MEZZO", "") or "").strip()
+                    targa_oggi = str(match_corr.iloc[0].get("MEZZO", "Nessuno") or "Nessuno").strip()
+                    df_nuovo.at[idx, "MEZZO"] = targa_oggi
                     km_inizio_nuovo = km_per_targa.get(targa_oggi, int(match_corr.iloc[0].get("KM_INIZIO", 0) or 0))
                 else:
                     km_inizio_nuovo = 0
