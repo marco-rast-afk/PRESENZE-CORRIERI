@@ -790,20 +790,18 @@ if scelta == "📋 Tabellone Presenze":
             col_mezzo = df_attuale.columns.get_loc("MEZZO")
 
             # Lo snapshot targa→km viene costruito UNA SOLA VOLTA per giornata
-            # e conservato in session_state. Così anche se sposti la stessa targa
-            # più volte i km originali restano sempre disponibili.
+            # leggendo il DataFrame ORIGINALE (prima dei delta) e conservato in session_state.
+            # Garantisce che ogni targa mantenga sempre i km di inizio giornata
+            # indipendentemente da quante volte viene spostata.
             if "_km_snapshot_giornata" not in st.session_state:
                 st.session_state["_km_snapshot_giornata"] = {}
-            # Aggiorna lo snapshot leggendo il df_attuale PRIMA degli spostamenti,
-            # includendo anche le targhe che stanno per essere cedute in questa operazione.
-            # Fonte: df_attuale che contiene i delta già applicati ma non ancora gli scambi.
-            for idx, row in df_attuale.iterrows():
+            df_originale = st.session_state.stato_giornaliero  # prima dei delta
+            for idx, row in df_originale.iterrows():
                 targa = str(row.get("MEZZO", "") or "").strip()
                 km    = int(row.get("KM_INIZIO", 0) or 0)
                 if targa and targa not in ("Nessuno", "── NON ASSEGNATI ──", "── GIÀ ASSEGNATI ──"):
                     if targa not in st.session_state["_km_snapshot_giornata"]:
                         st.session_state["_km_snapshot_giornata"][targa] = km
-                    # Aggiorna anche se i km erano 0 e ora sono > 0 (targa appena assegnata con km)
                     elif km > 0 and st.session_state["_km_snapshot_giornata"][targa] == 0:
                         st.session_state["_km_snapshot_giornata"][targa] = km
             km_snapshot = st.session_state["_km_snapshot_giornata"]
