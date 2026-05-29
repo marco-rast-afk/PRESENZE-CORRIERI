@@ -558,6 +558,36 @@ if _esito:
         for _m in _msgs:
             st.sidebar.error(f"❌ Errore: {_m}")
 
+# ── TASTO RICALCOLO KM PERCORSI ──────────────────────────────────────────────
+st.sidebar.markdown("---")
+st.sidebar.subheader("🔧 Strumenti")
+st.sidebar.caption("Ricalcola i Km Percorsi nello storico come KM_FINE − KM_INIZIO per ogni riga. Utile se i dati sono stati inseriti manualmente su Supabase.")
+
+if st.sidebar.button("🔄 RICALCOLA KM PERCORSI", use_container_width=True):
+    df_st = st.session_state.storico_presenze.copy()
+    if df_st.empty:
+        st.sidebar.warning("⚠️ Storico presenze vuoto, nessun ricalcolo effettuato.")
+    else:
+        def _to_int(val):
+            try:
+                return int(float(val)) if val not in (None, "", "nan") else 0
+            except (ValueError, TypeError):
+                return 0
+        df_st["KM_INIZIO"]   = df_st["KM_INIZIO"].apply(_to_int)
+        df_st["KM_FINE"]     = df_st["KM_FINE"].apply(_to_int)
+        df_st["KM_PERCORSI"] = (df_st["KM_FINE"] - df_st["KM_INIZIO"]).clip(lower=0)
+        st.session_state.storico_presenze = df_st
+        # Salva immediatamente su Supabase
+        st.session_state["_sb_errori"] = []
+        _sb_upsert("storico_presenze", _df_to_records(df_st))
+        errori = st.session_state.get("_sb_errori", [])
+        if errori:
+            for _m in errori:
+                st.sidebar.warning(_m)
+        else:
+            n = len(df_st)
+            st.sidebar.success(f"✅ Ricalcolo completato su {n} righe. Salvato su Supabase.")
+
 # ── TASTO NUOVA GIORNATA ─────────────────────────────────────────────────────
 st.sidebar.markdown("---")
 st.sidebar.subheader("📅 Nuova Giornata")
