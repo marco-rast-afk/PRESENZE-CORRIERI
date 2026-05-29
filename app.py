@@ -148,6 +148,27 @@ def parse_data_ita(s):
 # ─────────────────────────────────────────────────────────────────────────────
 # SALVATAGGIO / CARICAMENTO SUPABASE
 # ─────────────────────────────────────────────────────────────────────────────
+# Colonne effettivamente presenti su Supabase per ogni tabella.
+# Se una colonna esiste nel DataFrame ma NON in Supabase il salvataggio
+# fallisce con PGRST204 (schema cache miss). Aggiungere qui le colonne
+# mano a mano che vengono create su Supabase.
+_COLONNE_SUPABASE = {
+    "furgoni":            ["MARCA", "MODELLO", "TIPO", "TARGA", "DISPONIBILE"],
+    "anagrafica_corrieri":["COGNOME", "NOME", "CELLULARE", "GIRO_FISSO"],
+    "responsabili":       ["COGNOME", "NOME", "RUOLO"],
+    "stato_giornaliero":  ["COGNOME", "NOME", "CELLULARE", "GIRO_FISSO",
+                           "STATO", "MEZZO", "KM_INIZIO", "NOTE"],
+    "storico_presenze":   ["DATA", "COGNOME", "NOME", "GIRO_FISSO", "STATO",
+                           "MEZZO", "KM_INIZIO", "KM_FINE", "KM_PERCORSI", "NOTE"],
+}
+
+def _filtra_colonne(tabella: str, records: list) -> list:
+    """Rimuove dai record le chiavi non presenti nello schema Supabase."""
+    cols = _COLONNE_SUPABASE.get(tabella)
+    if not cols:
+        return records
+    return [{k: v for k, v in r.items() if k in cols} for r in records]
+
 def _sb_truncate(tabella: str):
     """Svuota la tabella via SQL RPC (unico modo affidabile in Supabase)."""
     r = requests.post(
@@ -156,20 +177,29 @@ def _sb_truncate(tabella: str):
         data=json.dumps({"table_name": tabella})
     )
     if r.status_code not in (200, 204):
-        st.warning(f"⚠️ Errore truncate '{tabella}': HTTP {r.status_code} — {r.text}")
+        _log_errore_sb(f"truncate '{tabella}'", r.status_code, r.text)
 
 def _sb_inserisci(tabella: str, records: list):
     """Inserisce una lista di record nella tabella."""
     if not records:
         return
-    puliti = [{k: v for k, v in r.items() if k != "id"} for r in records]
+    puliti = _filtra_colonne(tabella, [{k: v for k, v in r.items() if k != "id"} for r in records])
+    if not puliti:
+        return
     resp = requests.post(
         _sb_url(tabella),
         headers={**SB_HEADERS, "Content-Type": "application/json"},
         data=json.dumps(puliti)
     )
     if resp.status_code not in (200, 201):
-        st.warning(f"⚠️ Errore inserimento '{tabella}': HTTP {resp.status_code} — {resp.text}")
+        _log_errore_sb(f"inserimento '{tabella}'", resp.status_code, resp.text)
+
+def _log_errore_sb(operazione: str, status: int, testo: str):
+    """Accumula gli errori Supabase in session_state così non scompaiono."""
+    msg = f"⚠️ Errore {operazione}: HTTP {status} — {testo}"
+    if "_sb_errori" not in st.session_state:
+        st.session_state["_sb_errori"] = []
+    st.session_state["_sb_errori"].append(msg)
 
 def _sb_upsert(tabella: str, records: list):
     """Svuota la tabella e reinserisce i record aggiornati."""
@@ -208,16 +238,22 @@ def _sb_leggi(tabella: str) -> list:
 
 def salva_database_json():
     """Salva tutti i DataFrame su Supabase."""
+    # Azzera log errori precedenti
+    st.session_state["_sb_errori"] = []
     try:
         _sb_upsert("furgoni",            st.session_state.furgoni.to_dict(orient="records"))
         _sb_upsert("anagrafica_corrieri", st.session_state.anagrafica_corrieri.to_dict(orient="records"))
         _sb_upsert("responsabili",        st.session_state.responsabili.to_dict(orient="records"))
         _sb_upsert("stato_giornaliero",   st.session_state.stato_giornaliero.to_dict(orient="records"))
         _sb_upsert("storico_presenze",    st.session_state.storico_presenze.to_dict(orient="records"))
-        st.sidebar.success("Salvato su Supabase!")
-        return True
+        errori = st.session_state.get("_sb_errori", [])
+        if errori:
+            st.session_state["_sb_esito"] = ("warning", errori)
+        else:
+            st.session_state["_sb_esito"] = ("ok", [])
+        return len(errori) == 0
     except Exception as e:
-        st.error(f"Errore salvataggio Supabase: {e}")
+        st.session_state["_sb_esito"] = ("error", [str(e)])
         return False
 
 def carica_database_json():
@@ -482,7 +518,19 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("💾 Salvataggio Dati")
 if st.sidebar.button("💾 SALVA SU DATABASE", use_container_width=True, type="primary"):
     salva_database_json()
-    st.sidebar.success("Database JSON salvato con successo!")
+
+# Mostra esito salvataggio in modo PERSISTENTE (non scompare al re-render)
+_esito = st.session_state.get("_sb_esito")
+if _esito:
+    _tipo, _msgs = _esito
+    if _tipo == "ok":
+        st.sidebar.success("✅ Salvato su Supabase correttamente!")
+    elif _tipo == "warning":
+        for _m in _msgs:
+            st.sidebar.warning(_m)
+    elif _tipo == "error":
+        for _m in _msgs:
+            st.sidebar.error(f"❌ Errore: {_m}")
 
 # ── TASTO NUOVA GIORNATA ─────────────────────────────────────────────────────
 st.sidebar.markdown("---")
